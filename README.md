@@ -2,6 +2,10 @@
 
 Esta função agiliza e automatiza a aplicação de pacotes de atualização de dicionário, minimizando o trabalho manual e o risco de erros.
 
+
+![Compartilhamento-de-tela-2025-08-07-8h03min49s](https://github.com/user-attachments/assets/c786eb83-8e2d-41f6-bbac-807a2db2186c)
+
+
 **Principais Vantagens:**
 
 * **Aplicação em Lote:** Selecione múltiplos pacotes `.zip` de uma só vez.

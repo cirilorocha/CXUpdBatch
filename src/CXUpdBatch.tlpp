@@ -1,0 +1,940 @@
+#INCLUDE 'RWMake.ch'
+#INCLUDE 'Totvs.ch'
+#INCLUDE 'ParmType.ch'
+#INCLUDE 'FwBrowse.ch'
+
+Static _cVersao		:= '1.10'						AS Character
+Static _cDtVersao	:= '02/08/2025'					AS Character
+
+#DEFINE _LINHA_			StrZero(ProcLine(),5)
+#DEFINE _NomeProg_		RetFileName(ProcSource())
+#DEFINE _MsgLinha_		_NomeProg_+'('+_LINHA_+')'
+#Define _LINOK_				'S'+_LINHA_
+#Define _LINERRO_			'E'+_LINHA_
+#Define _LINALERT_			'A'+_LINHA_
+
+//-------------------------------------------------------------------------------------------------
+/*/{Protheus.doc} CXUpdBatch
+@description	Gera o lote para aplicação de atualizações usando o UpdBatch, a partir diretamente
+				dos arquivos zip da Totvs
+@autor			Cirilo Rocha
+@since			31/07/2025
+/*/
+//-------------------------------------------------------------------------------------------------
+//O SOFTWARE É FORNECIDO "TAL COMO ESTÁ", SEM GARANTIA DE QUALQUER TIPO, EXPRESSA OU IMPLÍCITA,
+//INCLUINDO MAS NÃO SE LIMITANDO A GARANTIAS DE COMERCIALIZAÇÃO, ADEQUAÇÃO A UMA FINALIDADE
+//ESPECÍFICA E NÃO INFRACÇÃO. EM NENHUM CASO OS AUTORES OU TITULARES DE DIREITOS AUTORAIS
+//SERÃO RESPONSÁVEIS POR QUALQUER REIVINDICAÇÃO, DANOS OU OUTRA RESPONSABILIDADE, SEJA 
+//EM AÇÃO DE CONTRATO OU QUALQUER OUTRA FORMA, PROVENIENTE, FORA OU RELACIONADO AO SOFTWARE. 
+//
+//                    *** USE A VONTADE, POR SUA CONTA E RISCO ***
+//-------------------------------------------------------------------------------------------------
+// TODO - MELHORIA FUTURA : CRIAR PROCESSO PARA TAMBÉM APLICAR OS PACOTES PTM
+User Function CXUpdBatch()
+
+	//-- Declaração de Variáveis ----------------------------------------------
+	Local lOK										AS Logical
+
+	If Select('SX2') == 0	//-- Ambiente não aberto, faz a carga
+		sfAbreAmbiente({|| lOK	:= sfUpdBatchMain(), oMainWnd:End()	})
+	Else
+		lOK	:= sfUpdBatchMain()
+	EndIf
+
+	//-- Se gerou os pacotes chama o UpdBatch!
+	If lOK
+		UpdBatch()
+	EndIf
+
+Return
+//-------------------------------------------------------------------------------------------------
+Static Function sfUpdBatchMain()					AS Logical
+
+	//-- Declaração de Variáveis ----------------------------------------------
+	Local aSM0			:= FWLoadSM0()				AS Array
+	Local cArquivos									AS Character
+	Local lOK										AS Logical
+	Local nX										AS Numeric
+
+	Private aEmpresas	:= {}						AS Array
+	Private aArquivos	:= {}						AS Array
+	Private aPacotes	:= {}						AS Array
+	Private cDescPct								AS Character
+	Private cPathTmp								AS Character
+	Private cPathUpd								AS Character
+
+	//-- Posições array aPacotes
+	Private nP_MARK	:= 01							AS Numeric
+	Private nP_DAT	:= 02							AS Numeric
+	Private nP_RLSE	:= 03							AS Numeric
+	Private nP_NOM	:= 04							AS Numeric
+	Private nP_ARQ 	:= 05							AS Numeric
+	Private nP_PATH	:= 06							AS Numeric
+	Private nP_ERRO	:= 07							AS Numeric
+	Private nP_MSG	:= 08							AS Numeric
+	Private nP_JSON	:= 09							AS Numeric
+	
+	Private nP_TAM	:= 09							AS Numeric
+
+	//-------------------------------------------------------------------------
+	cDescPct	:= '### CXUpdBatch - '+Transform(DtoS(Date()),"@R 9999/99/99")+'-'+Time()+' ###'
+	cPathTmp	:= '\temp\'+GetNextAlias()+'\'
+	cPathUpd	:= GetSystemLoadDir()+'updbatch\'
+
+	If .Not. FWMakeDir(cPathTmp,.T.)			//-- Cria diretório / pasta (cria toda a estrutura)
+		Return .F.
+	EndIf
+
+	If .Not. sfUpdPend()						//-- Tem update pedente?
+		Return .F.
+	EndIf
+
+	For nX := 1 to Len(aSM0)
+		If aScan(aEmpresas,{|x| x[2] == aSM0[nX][1] }) == 0
+			aAdd(aEmpresas,{.T.,aSM0[nX][1],aSM0[nX][17]})
+		EndIf
+	Next nX
+
+	//-- Seleciona os pacotes de atualização
+	cArquivos	:= sfGetUpdates()
+	If Empty(cArquivos)
+		FwAlertError('Nenhum arquivo selecionado.',_MsgLinha_)
+		Return .F.
+	EndIf
+	aArquivos	:= sfSeparaArq(cArquivos)
+
+	//-- Extrair arquivos para a pasta temporária
+	Processa( {|| sfExtraiPct(aArquivos) },_MsgLinha_+' - Extraindo pacotes', 'Aguarde...',.F. )
+	
+	cDescPct	:= FWInputBox('Digite uma descrição para o conjunto de atualizações',cDescPct)
+	If Empty(cDescPct)
+		lOk	:= .F.
+	Else
+		If 	sfSelectPcts(aPacotes) .And. ;
+			sfSelectEmp()
+
+			lOK	:= 	sfGravaUpd(aPacotes)
+		EndIf
+	EndIf
+
+	FWMsgRun(,{|| FWDirRemove(cPathTmp,.F.,.T.) },_MsgLinha_+' - Apagando arquivos temporários','Aguarde...')	//-- Apaga o diretório temporário
+
+Return lOK
+
+//-------------------------------------------------------------------------------------------------
+/*/{Protheus.doc} sfGetUpdates
+@description	Função para selecionar os arquivos de update
+@autor			Cirilo Rocha
+@since			27/07/2025
+/*/
+//-------------------------------------------------------------------------------------------------
+Static Function sfGetUpdates()						AS Character
+
+	//-- Declaração de Variáveis ----------------------------------------------
+	Local aRet										AS Array
+	Local cRet										AS Character
+	Local cDirInicial	:= 'C:\Protheus\'			AS Character
+	Local cProfSecao:= RetFileName(ProcSource())	AS Character
+	Local cProfChave:= ProcName()					AS Character
+	Local cMascara	:= '*.zip'						AS Character	//-- Mascara e Salvar não devem ser informados com diretórios e tFileDialog
+	Local lSalvar	:= .F.							AS Logical
+	Local nOpcoes	:= GETF_LOCALHARD+GETF_NETWORKDRIVE+GETF_MULTISELECT	AS Numeric
+
+	Local cDrive,cDir,cFile,cExten					AS Character
+
+	//-------------------------------------------------------------------------
+	cDir	:= fwGetProfString(cProfSecao,cProfChave,cDirInicial,.T.)	//-- Carrega último caminho utilizado
+
+	cRet    := tFileDialog(	cMascara											,;	//01 cMascara
+							_MsgLinha_+' Os pacotes para atualização: '			,;	//02 cTitulo
+							1													,;	//03 nDef
+							IIf(ExistDir(cDir),cDir,cDirInicial)				,;	//04 cDirInicial
+							lSalvar												,;	//05 lSalvar
+							nOpcoes	    										)	//06 nOpcoes
+	
+	//-- Tratamento de erros para WebApp (pode não ser necessário no futuro)
+	aRet	:= sfSeparaArq(cRet)
+	SplitPath( aRet[1] , @cDrive, @cDir, @cFile, @cExten )
+	If BitAnd(nOpcoes,GETF_RETDIRECTORY)		//-- Diretórios
+		If .Not. ExistDir(cRet)
+			FwAlertError('Diretório informado '+cRet+' NÃO existe.',_MsgLinha_)
+			cRet	:= ''
+		EndIf		
+	ElseIf .Not. Empty(cRet)					//-- Arquivos
+		If Empty(cFile)
+			FwAlertError('Nenhum nome de arquivo informado.',_MsgLinha_)
+			cRet	:= ''
+		ElseIf 	.Not. lSalvar .And. ;
+				.Not. File(aRet[1])				//-- Valida se arquivo existe
+			FwAlertError('Arquivo informado '+cRet+' NÃO existe.',_MsgLinha_)
+			cRet	:= ''
+		EndIf
+	EndIf
+	
+	//-- Remove os caracteres especiais se houver
+	If lSalvar
+		cFile	:= FwNoAccent(cFile)
+		cRet	:= cDrive+cDir+cFile+cExten
+	EndIf
+
+	//-- Salva o diretório atual que o usuário utilizou -----------------------
+	If .Not. Empty(cRet)
+		fwWriteProfString(cProfSecao,cProfChave,cDrive+cDir,.T.) //-- Guarda o diretório atual
+	EndIf
+
+Return cRet
+
+//-------------------------------------------------------------------------------------------------
+/*/{Protheus.doc} sfExtraiPct
+@description	Extrai o pacote para o diretório temporário e lê os metadados
+@autor			Cirilo Rocha
+@since			27/07/2025
+/*/
+//-------------------------------------------------------------------------------------------------
+Static Function sfExtraiPct(aArquivos	AS Array)	AS Logical
+
+	//-- Declaração de Variáveis ----------------------------------------------
+	Local aArqZip	:= {}							AS Array
+	Local cArqSDF	:= ''							AS Character
+	Local cTemp										AS Character
+	Local nX,nP										AS Numeric
+	Local nRet										AS Numeric
+
+	//-------------------------------------------------------------------------
+	ProcRegua(Len(aArquivos))
+	For nX := 1 to Len(aArquivos)
+		
+		IncProc('Extraindo pacote '+StrZero(nX,2)+' de '+StrZero(Len(aArquivos),2),_MsgLinha_)
+		ProcessMessages()
+
+		aAdd(aPacotes,Array(nP_TAM))
+		aPacotes[nX][nP_MARK]	:= .F.
+		aPacotes[nX][nP_DAT	]	:= 'ERRO'
+		aPacotes[nX][nP_RLSE]	:= 'ERRO'
+		aPacotes[nX][nP_NOM	]	:= RetFileName(aArquivos[nX])
+		aPacotes[nX][nP_ARQ ]	:= RTrim(aArquivos[nX])
+		aPacotes[nX][nP_PATH]	:= cPathTmp+StrZero(nX,2)+'\'
+		aPacotes[nX][nP_ERRO]	:= .F.
+		aPacotes[nX][nP_MSG]	:= ''
+		aPacotes[nX][nP_JSON]	:= JsonObject():New()
+
+		aArqZip	:= FListZip( aArquivos[nX],@nRet)
+		If nRet < 0
+			aPacotes[nX][nP_MSG]  := _LINERRO_+' - Erro ao compactar arquivo: '+aArquivos[nX]
+			aPacotes[nX][nP_ERRO] := .T.
+			Loop
+		EndIf
+
+		If aScan(aArqZip,{|x| x[1] == 'sdf/bra/'}) <= 0
+			aPacotes[nX][nP_MSG]  := _LINERRO_+' - Pacote NÃO possui o diretório \sdf\bra\'
+			aPacotes[nX][nP_ERRO] := .T.
+			Loop
+		EndIf
+
+		If aScan(aArqZip,{|x| x[1] == 'sdf/bra/sdfbra.txt'}) <= 0
+			aPacotes[nX][nP_MSG]  := _LINERRO_+' - Pacote NÃO possui o arquivo sdfbra.txt'
+			aPacotes[nX][nP_ERRO] := .T.
+			Loop
+		EndIf
+
+		If .Not. CpyT2S(aArquivos[nX],cPathTmp,.F.,.F.,500000)	//-- Buffer de 500k melhora a performance
+			aPacotes[nX][nP_MSG]  := _LINERRO_+' - Erro ao copiar arquivo para o servidor'
+			aPacotes[nX][nP_ERRO] := .T.
+			Loop
+		EndIf
+		aPacotes[nX][nP_ARQ ]	:= cPathTmp+RTrim(ExtractFile(aArquivos[nX]))
+
+		If .Not. FWMakeDir(aPacotes[nX][nP_PATH],.T.)
+			aPacotes[nX][nP_MSG]  := _LINERRO_+' - Não foi possível criar o diretório: '+aPacotes[nX][nP_PATH]
+			aPacotes[nX][nP_ERRO] := .T.
+			Loop
+		EndIf
+
+		If FUnZip( aPacotes[nX][nP_ARQ] , aPacotes[nX][nP_PATH] ) <> 0
+			aPacotes[nX][nP_MSG]  := _LINERRO_+' - Erro ao extrair o pacote.'
+			aPacotes[nX][nP_ERRO] := .T.
+			Loop
+		EndIf
+
+		aPacotes[nX][nP_PATH] += 'sdf\bra\'
+		If .Not. ExistDir(aPacotes[nX][nP_PATH])
+			aPacotes[nX][nP_MSG]  := _LINERRO_+' - Pacote NÃO possui o diretório \sdf\bra\'
+			aPacotes[nX][nP_ERRO] := .T.
+			Loop
+		EndIf
+
+		If .Not. File(aPacotes[nX][nP_PATH]+'sdfbra.txt')
+			aPacotes[nX][nP_MSG]  := _LINERRO_+' - Pacote NÃO possui o arquivo sdfbra.txt'
+			aPacotes[nX][nP_ERRO] := .T.
+			Loop
+		EndIf
+		
+		cArqSDF	:= sfReadFile(aPacotes[nX][nP_PATH]+'sdfbra.txt')
+		If Empty(cArqSDF)
+			aPacotes[nX][nP_MSG]  := _LINERRO_+' - ERRO: Arquivo sdfbra.txt vazio.'
+			aPacotes[nX][nP_ERRO] := .T.
+			Loop
+		EndIf
+
+		nP		:= At('EM_PRJDES ', cArqSDF)		//-- Posição do campo EM_PRJDES
+		If nP <= 0
+			nP		:= At('FL_DESCRI ', cArqSDF)	//-- Posição do campo FL_DESCRI
+			If nP <= 0
+				aPacotes[nX][nP_MSG]  := _LINERRO_+' - Arquivo sdfbra.txt NÃO possui o campo FL_DESCRI'
+				aPacotes[nX][nP_ERRO] := .T.
+				Loop
+			Else
+				cTemp	:= RTrim(SubStr(cArqSDF, nP+10,100))
+				aPacotes[nX][nP_JSON]['fl_descri']	:= cTemp
+			EndIf
+		Else
+			cTemp	:= RTrim(SubStr(cArqSDF, nP+10,100))
+			aPacotes[nX][nP_JSON]['em_prjdes']	:= cTemp
+		EndIf
+		aPacotes[nX][nP_NOM]	:= cTemp	//-- Extrai o campo EM_RELEASE ou FL_CPMARK
+
+		nP		:= At('FL_DATE   ', cArqSDF)		//-- Posição do campo FL_DATE
+		If nP <= 0
+			aPacotes[nX][nP_MSG]  := _LINERRO_+' - Arquivo sdfbra.txt NÃO possui o campo FL_DATE'
+			aPacotes[nX][nP_ERRO] := .T.
+			Loop
+		EndIf
+		cTemp	:= RTrim(SubStr(cArqSDF, nP+10, 10))
+		aPacotes[nX][nP_JSON]['fl_date']	:= cTemp
+		aPacotes[nX][nP_DAT]	:= cTemp	//-- Extrai o campo FL_DATE
+
+		nP		:= At('FL_TIME   ', cArqSDF)		//-- Posição do campo FL_TIME
+		If nP > 0
+			aPacotes[nX][nP_JSON]['fl_time']	:= RTrim(SubStr(cArqSDF, nP+10, 10))
+		EndIf
+
+		nP		:= At('FL_APMODE ', cArqSDF)		//-- Posição do campo FL_APMODE
+		If nP > 0
+			aPacotes[nX][nP_JSON]['fl_apmode']	:= RTrim(SubStr(cArqSDF, nP+10, 10))
+		EndIf
+
+		nP		:= At('PR_IDENT  ', cArqSDF)		//-- Posição do campo PR_IDENT
+		If nP > 0
+			aPacotes[nX][nP_JSON]['pr_ident']	:= RTrim(SubStr(cArqSDF, nP+10, 10))
+		EndIf
+
+		nP		:= At('PK_IDENT  ', cArqSDF)		//-- Posição do campo PK_IDENT
+		If nP > 0
+			aPacotes[nX][nP_JSON]['pk_ident']	:= RTrim(SubStr(cArqSDF, nP+10, 10))
+		EndIf
+
+		nP		:= At('EM_RELEASE', cArqSDF)		//-- Posição do campo EM_RELEASE
+		If nP <= 0
+			nP		:= At('FL_CPMARK ', cArqSDF)	//-- Posição do campo FL_CPMARK
+			If nP <= 0
+				aPacotes[nX][nP_MSG]  := _LINERRO_+' - Arquivo sdfbra.txt NÃO possui o campo FL_CPMARK'
+				aPacotes[nX][nP_ERRO] := .T.
+				Loop
+			Else
+				cTemp	:= RTrim(SubStr(cArqSDF, nP+10, 10))
+				aPacotes[nX][nP_JSON]['fl_cpmark']	:= cTemp
+			EndIf
+		Else
+			cTemp	:= RTrim(SubStr(cArqSDF, nP+10, 10))
+			aPacotes[nX][nP_JSON]['em_release']	:= cTemp
+		EndIf
+		aPacotes[nX][nP_RLSE]	:= cTemp	//-- Extrai o campo EM_RELEASE ou FL_CPMARK
+		
+		nP		:= At('FL_NOTICE ', cArqSDF)		//-- Posição do campo FL_NOTICE
+		If nP > 0
+			aPacotes[nX][nP_JSON]['fl_notice']	:= RTrim(SubStr(cArqSDF, nP+10, 100))
+		EndIf
+
+		nP		:= At('FL_ECPMARK', cArqSDF)		//-- Posição do campo FL_ECPMARK
+		If nP > 0
+			aPacotes[nX][nP_JSON]['fl_ecpmark']	:= RTrim(SubStr(cArqSDF, nP+10, 150))
+		EndIf
+
+		nP		:= At('EM_ENCREL', cArqSDF)		//-- Posição do campo EM_ENCREL
+		If nP > 0
+			aPacotes[nX][nP_JSON]['em_encrel']	:= RTrim(SubStr(cArqSDF, nP+10, 30))
+		EndIf
+
+		nP		:= At('EM_PRJCOD ', cArqSDF)		//-- Posição do campo EM_PRJCOD
+		If nP > 0
+			aPacotes[nX][nP_JSON]['em_prjcod']	:= RTrim(SubStr(cArqSDF, nP+10, 10))
+		EndIf
+
+		nP		:= At('EM_PRJVER ', cArqSDF)		//-- Posição do campo EM_PRJVER
+		If nP > 0
+			aPacotes[nX][nP_JSON]['em_prjver']	:= RTrim(SubStr(cArqSDF, nP+10, 10))
+		EndIf	
+
+		aPacotes[nX][nP_MARK]	:= .T.
+		aPacotes[nX][nP_ERRO]	:= .F.
+	Next nX
+
+Return .T.
+
+//-------------------------------------------------------------------------------------------------
+/*/{Protheus.doc} sfReadFile
+@description	Leitura de um arquivo de texto, sem limitação de 64k do MemoRead
+@autor			Cirilo Rocha
+@since			27/07/2025
+/*/
+//-------------------------------------------------------------------------------------------------
+Static Function sfReadFile(cFile	AS Character)	AS Character
+	
+	//-- Declaração de Variáveis ----------------------------------------------
+	Local oFile										AS Object
+	Local cRet	:= ''								AS Character
+	
+	//-- Parâmetros da Rotina -------------------------------------------------
+	ParamType 0		VAR cFile		AS Character
+	
+	//-------------------------------------------------------------------------
+	oFile := FWFileReader():New(cFile,/*xBreakLine*/)
+	oFile:SetBufferSize(50000)	//-- Aumento o buffer vai agilizar bastante a leitura
+	If (oFile:Open())
+		cRet	:= oFile:FullRead()
+		If Empty(cRet)
+			FwAlertError('ERRO: Arquivo vazio.',_MsgLinha_)
+		EndIf
+	Else
+		FwAlertError('ERRO: Na leitura do arquivo '+cFile+CRLF+;
+					oFile:Error():Message)
+	EndIf
+	oFile:Close()		//-- Fecha arquivo
+	FreeObj(oFile)
+
+Return cRet
+
+//-------------------------------------------------------------------------------------------------
+/*/{Protheus.doc} sfSeparaArq
+@description	Função para quebrar a lista de arquivos da função tFileDialog, quando multiseleção
+				 para conseguir identificar arquivos que contenham ; no nome.                     
+@autor			Cirilo Rocha
+@since			28/07/2025
+/*/
+//-------------------------------------------------------------------------------------------------
+Static Function sfSeparaArq(cArquivos	AS Character);	//01 cArquivos
+													AS Array
+	//-- Declaração de Variáveis ----------------------------------------------
+	Local aArquivos	:= {}							AS Array
+	Local nPAtu										AS Integer
+	Local nPQueb									AS Integer
+	Local nPFim										AS Integer
+
+	//-- Parâmetros da Rotina -------------------------------------------------
+	ParamType 0		VAR cArquivos		AS Character
+
+	//---------------------------------------------------------------------------------------------
+	////TESTE WINDOWS
+	//cArquivos:=	"c:\temp\carlitolima13.jpg;"+;
+	//			"c:\temp\erro.log;"+;
+	//			"c:\temp\getfols-1200 - 2022-12-12-08;47;27.jpg;"+;
+	//			"c:\temp\rgperc29 - 2022-12-08-17;18;29.sql"
+	////TESTE LINUX
+	//cArquivos:=	"/tmp/carlitolima13.jpg;"+;
+	//			"/tmp/erro.log;"+;
+	//			"/tmp/getfols-1200 - 2022-12-12-08;47;27.jpg;"+;
+	//			"/tmp/rgperc29 - 2022-12-08-17;18;29.sql"
+
+	//---------------------------------------------------------------------------------------------
+	If At(' | ',cArquivos)	//cGetFile antiga
+		aArquivos	:= StrTokArr2(cArquivos,' | ',.F.)
+	Else
+		nPAtu	:= 1
+		nPQueb	:= At(':',cArquivos)
+		If nPQueb > 0					//Windows!
+			While .T.
+				//Busca proxima quebra
+				nPQueb	:= At(':',cArquivos,nPAtu+2)		//Pula o primeiro c:\
+				nPFim	:= Rat(';',Left(cArquivos,nPQueb))	//+3 para pular o próprio c:\ do arquivo atual
+				If nPFim == 0
+					Exit
+				Else
+					aAdd(aArquivos,SubStr(cArquivos,nPAtu,nPFim-nPAtu))
+					nPAtu	:= nPFim+1
+				EndIf
+			EndDo
+		ElseIf At(';/',cArquivos)		//Linux
+			While .T.
+				//Busca proxima quebra
+				nPFim	:= At(';/',cArquivos,nPAtu)
+				If nPFim == 0
+					Exit
+				Else
+					aAdd(aArquivos,SubStr(cArquivos,nPAtu,nPFim-nPAtu))
+					nPAtu	:= nPFim+1
+				EndIf
+			EndDo
+		EndIf
+		aAdd(aArquivos,SubStr(cArquivos,nPAtu))	//Último arquivo ou 1 Arquivo
+	EndIf
+
+Return aArquivos
+
+//-------------------------------------------------------------------------------------------------
+/*/{Protheus.doc} sfSelectPcts
+@description	Função para selecionar os pacotes de atualização e exibir os dados dos mesmos em um Browse.
+@autor			Cirilo Rocha
+@since			28/07/2025
+/*/
+//-------------------------------------------------------------------------------------------------
+Static Function sfSelectPcts(aDados	AS Array)		AS Logical
+	
+	//-- Declaração de Variáveis ----------------------------------------------
+	Local aPosBt									AS Array
+	Local nLarBt	:= 050							AS Numeric
+	Local nAltBt	:= 015							AS Numeric
+	
+	Local lOk		:= .F.							AS Logical
+	Local lMarca	:= .F.							AS Logical	//-- Como o browse vem pré-marcado, o botão desmarca
+
+	//-- Deixei privados caso alguma função chamada precise dos dados
+	Private oDlg,oLst,oPnl							AS Object
+	
+	//-------------------------------------------------------------------------
+	oDlg	:= MSDialog():New(	000,000,600,1200,_MsgLinha_+' - Selecione os Pacotes de Atualização - '+_cVersao+'|'+_cDtVersao,/*cPar6*/,/*nPar7*/,/*lPar8*/,;
+								/*DS_MODALFRAME*/,/*anClrText*/,/*anClrBack*/,/*oPar12*/,/*oWnd*/,.T.,,,,/*lTransparent*/)
+
+		aPosBt	:= sfPosBtn(oDlg,nLarBt,nAltBt)
+
+		oPnl := tPanel():New(005,005,,oDlg,,,,,,(oDlg:nWidth/2)-15,(oDlg:nHeight/2)-20-2*nAltBt) //Preciso do Painel só para limitar o tamanho do browse
+		oLst := FWFormBrowse():New()
+		oLst:oConfig:nRowHeight	:= 25	//-- Reduzo um pouco a altura das linhas
+		oLst:oConfig:nFontHeader:= 09	//-- Reduzo o tamanho da fonte
+		oLst:oConfig:nFontBody	:= 10	//-- Reduzo o tamanho da fonte
+
+		oLst:setDataArray()
+		oLst:setArray( aDados )	//-- Seta o vetor a ser utilizado
+		//oLst:disableConfig()
+		oLst:disableReport()
+		oLst:SetLocate()		//-- Habilita a Localização de registros
+		oLst:bDelOk	:= {|| .F.}	//-- Não permite deletar linhas
+
+		// Evento de DuploClick (troca o valor do primeiro elemento do Vetor)
+		oLst:bLDblClick := {|| sfMarcaReg() }
+		
+		oLst:AddButton('Inverte Seleção', {|| aEval(oLst:oData:aArray,{|x| IIF(x[nP_ERRO],,x[nP_MARK] := .Not. x[nP_MARK])}),oLst:Refresh() })
+
+		oLst:AddMarkColumns({|| If(aDados[oLst:nAt,nP_MARK],'LBTIK','LBNO') })	//-- Coluna Marca
+		aTail(oLst:aColumns):bHeaderClick	:= {|| aEval(oLst:oData:aArray,{|x| IIf(x[nP_ERRO],, x[nP_MARK]:= lMarca ) }) , lMarca:=.Not.lMarca , oLst:Refresh() }	//-- Marca/Desmarca Todos
+
+		// Monta a linha a ser exibina no Browse
+		//               Descrição       bDados                        Tipo   Picture     Alinhamento        Tam Dec Edita
+		oLst:addColumn({'Data'			,{|| aDados[oLst:nAt][nP_DAT	]},'C',/*cPicture*/ , COLUMN_ALIGN_LEFT	, 08,00,.F.})
+		oLst:addColumn({'Release'		,{|| aDados[oLst:nAt][nP_RLSE	]},'C',/*cPicture*/ , COLUMN_ALIGN_LEFT	, 10,00,.F.})
+		oLst:addColumn({'Nome'			,{|| aDados[oLst:nAt][nP_NOM	]},'C',/*cPicture*/ , COLUMN_ALIGN_LEFT	, 50,00,.F.})
+		oLst:addColumn({'Mensagem Erro'	,{|| aDados[oLst:nAt][nP_MSG	]},'C',/*cPicture*/ , COLUMN_ALIGN_LEFT	, 50,00,.F.})
+		oLst:addColumn({'Arquivo'		,{|| aDados[oLst:nAt][nP_ARQ 	]},'C',/*cPicture*/ , COLUMN_ALIGN_LEFT	, 50,00,.F.})
+
+		oLst:Activate(oPnl)
+
+		//-----------------------------------------------------------------------------------------
+		tButton():New(aPosBt[1],aPosBt[2][1],'Cancelar'		,oDlg,{|| lOk := .F. , oDlg:End() },nLarBt,nAltBt,,,,.T.)
+
+		tButton():New(aPosBt[1],aPosBt[2][5],'OK'			,oDlg,{|| IIf((lOk := sfVldOK(oLst)),oDlg:End(),) },nLarBt,nAltBt,,,,.T.)
+		
+		oDlg:lMaximized	:= .T.	//-- Executa com a tela maximizada
+		//oDlg:lEscClose := .F.  //Nao permite fechar usando a tecla ESC
+	// ativa diálogo centralizado
+	oDlg:Activate(/*uPar1*/,/*uPar2*/,/*uPar3*/,.T./*lCenter*/,/*{|Self| Valid }*/,/*uPar6*/,/*{|Self| Init }*/ )
+
+Return lOk
+
+//-------------------------------------------------------------------------------------------------
+/*/{Protheus.doc} sfPosBtn
+@description	Calcula as posições dos botões na parte inferior da tela (5 botões)
+@autor			Cirilo Rocha
+@since			17/09/2024
+/*/
+//-------------------------------------------------------------------------------------------------
+Static Function sfPosBtn(	oDlg	AS Object	,;
+							nLarBt	AS Numeric	,;
+							nAltBt	AS Numeric	)	AS Array
+	//-- Declaração de Variáveis ----------------------------------------------
+	Local aPosBt	:= 	{	Round( (oDlg:nHeight/2)-(1.75*nAltBt)-12,0)	,;	//-- Parte inferior da tela
+							{;
+								005											,;	//-- Posição mais a esquerda
+																			,;
+								(oDlg:nWidth/4)-(nLarBt/2)-003				,;	//-- Posição central
+																			,;
+								(oDlg:nWidth/2)-nLarBt - 010				;	//-- Posição mais a direita
+							};
+						}							AS Array
+	aPosBt[2][2]	:= 	aPosBt[2][3] - nLarBt - 010 							//-- Segundo botão
+	aPosBt[2][4]	:= 	aPosBt[2][3] + nLarBt + 010								//-- Quarto botão
+
+Return aPosBt
+
+//-------------------------------------------------------------------------------------------------
+/*/{Protheus.doc} sfMarcaReg
+@description	Função para marcar/desmarcar o registro atual do Browse
+@autor			Cirilo Rocha
+@since			28/07/2025
+/*/
+//-------------------------------------------------------------------------------------------------
+Static Function sfMarcaReg(	lMsg	AS Logical	)	//01 lMsg
+	
+	//-- Declaração de Variáveis ----------------------------------------------
+	Local nAt	:= oLst:nAt							AS Numeric
+
+	//-- Parâmetros da Rotina -------------------------------------------------
+	Default lMsg	:= .T.
+
+	//-- Marca/Desmarca o registro atual
+	If oLst:oData:aArray[nAt][nP_ERRO]
+		If lMsg
+			FwAlertError('Não é possível marcar o registro com erro.',_MsgLinha_)
+		EndIf
+		Return
+	Else
+		oLst:oData:aArray[nAt][nP_MARK] := !oLst:oData:aArray[nAt][nP_MARK]
+	EndIf
+	
+Return
+
+//-------------------------------------------------------------------------------------------------
+/*/{Protheus.doc} sfAbreAmbiente
+@description	Faz a abertura do ambiente Protheus
+@autor			Cirilo Rocha
+@since			28/07/2025
+/*/
+//-------------------------------------------------------------------------------------------------
+Static Function sfAbreAmbiente(bFuncao	AS CodeBlock)		AS Logical
+	
+	//-- Declaração de Variáveis ----------------------------------------------
+	Local aSM0										AS Array
+	Local lRet	:= .F.								AS Logical
+	Local nP										AS Numeric
+
+	//-------------------------------------------------------------------------
+	OpenSm0()
+	aSM0	:= FWLoadSM0()
+	nP		:= aScan(aSM0,{|x| x[1] == '99' })
+	If nP <= 0		; 	nP	:= 1		; 	EndIf
+
+	RpcSetType(3)
+	FWMsgRun(,;
+			{||lRet := RPCSetEnv(	aSM0[nP][1]		,;	//01 Empresa
+									aSM0[nP][2]		,;	//02 Filial
+									'000000'		,;	//03 Usuario
+									/*cEnvPass*/	,;	//04 Senha de Usuario
+									/* cMod */		,;	//05 Modulo (3ch)
+									_NomeProg_		,;	//06 Nome da Funcao
+									/*aTables*/		,;	//07 Tabelas para abrir
+									/*lShowFinal*/	,;	//08 Alimenta a variavel lMsFinalAuto
+									.F.				,;	//09 Gera mensagem de erro ao ocorrer erro ao checar a licenca
+									.T.				,;	//10 Pega a primeira filial do arquivo SM0 quando não passar a filial e realiza a abertura dos SXs
+									.F.				);	//11 Faz a abertura da conexao com servidor do banco
+						},;
+			_MsgLinha_+" - Montando Ambiente",;
+			"Aguarde...")
+
+	If .Not. lRet
+		FwAlertWarning(	'Não foi possível montar o ambiente.',_MsgLinha_)
+		Return .F.
+	EndIf
+
+	__cUserID	:= '000000'
+	cUserName	:= 'Administrador'
+	__cInternet	:= NIL			//-- Preciso colocar aqui para mostrar mensagens
+	lMsHelpAuto	:= .F.			//-- Preciso colocar aqui para mostrar mensagens
+
+	//-- Cria uma janela principal para trabalho
+	Public oMainWnd					AS Object
+	
+	oMainWnd := TWindow():New( 0, 0, 600, 800, _MsgLinha_+'-oMainWnd-'+_cVersao+'|'+_cDtVersao,,,,,,,,,,,,.T.,.T.,.T.,.T.,.T.)
+
+	oMainWnd:Activate( 'MAXIMIZED', oMainWnd:bLClicked, oMainWnd:bRClicked, oMainWnd:bMoved,;
+						oMainWnd:bResized, oMainWnd:bPainted, oMainWnd:bKeyDown, bFuncao ,;
+						,,,,,,,,,, oMainWnd:bLButtonUp )
+
+	RpcClearEnv()
+
+Return lRet
+
+//-------------------------------------------------------------------------------------------------
+/*/{Protheus.doc} sfUpdPend
+@description	Verifica se existe um update pendente
+@autor			Cirilo Rocha
+@since			31/07/2025
+/*/
+//-------------------------------------------------------------------------------------------------
+Static Function sfUpdPend()							AS Logical
+
+	//-- Declaração de Variáveis ----------------------------------------------
+	Local cQuery	:= ''							AS Character
+	Local cUpdate	:= ''							AS Character
+	Local oQry										AS Object
+	Local oStmUpd									AS Object
+	Local ucQry										AS Variant
+
+	Local lOK		:= .T.							AS Logical
+
+	//-------------------------------------------------------------------------
+	BeginContent Var cQuery AS SQL
+
+	SELECT PARAM_VALUE,BA_DESCRI
+	FROM TOP_PARAM
+	FULL OUTER JOIN SYS_BATCH_UPDATE SU
+		ON SU.D_E_L_E_T_<>'*'
+		AND BA_BATCHID = PARAM_VALUE
+	WHERE PARAM_NAME = 'PROTHEUS_BATCH_UPD'
+
+	EndContent
+
+	oQry	:= FwExecStatement():New(cQuery)
+	oQry:openAlias(@ucQry)	//oQry:getFixQuery() retorna query processada
+	If (ucQry)->(!EoF())
+		If FwAlertNoYes('<H3>Existe um update pedente.'+CRLF+;
+						'ID: '+(ucQry)->PARAM_VALUE+CRLF+;
+						'Descrição: '+(ucQry)->BA_DESCRI+CRLF+;
+						'DESEJA EXCLUIR E CRIAR UM NOVO ?</H3>',_MsgLinha_)
+
+			BeginContent Var cUpdate AS SQL
+
+			DELETE TOP_PARAM
+			WHERE PARAM_VALUE = ? 
+
+			EndContent
+
+			oStmUpd := FWPreparedStatement():New(cUpdate)
+			oStmUpd:SetString(1,(ucQry)->PARAM_VALUE)
+
+			If TCSqlExec(oStmUpd:getFixQuery()) < 0	//Executa update no SQL
+				FwAlertError(	'Erro na execução do update.'+CRLF+;
+								TCSqlError(),_MsgLinha_)
+			Else
+				FWDirRemove(cPathUpd+AllTrim((ucQry)->PARAM_VALUE),,.T.)
+				lOK	:= .T.
+			EndIf
+			oStmUpd:Destroy()		//-- Chama o destrutor
+			FreeObj(oStmUpd)		//-- Destroi objeto
+		Else
+			lOK	:= .F.
+		EndIf
+	EndIf
+	(ucQry)->(dbCloseArea()) //Fecha a query
+	oQry:destroy()
+	FreeObj(oQry)
+
+Return lOK
+
+//-------------------------------------------------------------------------------------------------
+/*/{Protheus.doc} sfSelectPcts
+@description	Função para selecionar os pacotes de atualização e exibir os dados dos mesmos em um Browse.
+@autor			Cirilo Rocha
+@since			28/07/2025
+/*/
+//-------------------------------------------------------------------------------------------------
+Static Function sfSelectEmp()						AS Logical
+	
+	//-- Declaração de Variáveis ----------------------------------------------
+	Local aPosBt									AS Array
+	Local nLarBt	:= 050							AS Numeric
+	Local nAltBt	:= 015							AS Numeric
+	
+	Local lOk		:= .F.							AS Logical
+	Local lMarca	:= .F.							AS Logical	//-- Como o browse vem pré-marcado, o botão desmarca
+
+	//-------------------------------------------------------------------------
+
+	//-- Deixei privados caso alguma função chamada precise dos dados
+	Private oDlg,oLst,oPnl							AS Object
+	
+	//-------------------------------------------------------------------------
+	oDlg	:= MSDialog():New(	000,000,600,600,_MsgLinha_+' - Selecione as Empresas para Aplicar',/*cPar6*/,/*nPar7*/,/*lPar8*/,;
+								/*DS_MODALFRAME*/,/*anClrText*/,/*anClrBack*/,/*oPar12*/,/*oWnd*/,.T.,,,,/*lTransparent*/)
+
+		aPosBt	:= sfPosBtn(oDlg,nLarBt,nAltBt)
+
+		oPnl := tPanel():New(005,005,,oDlg,,,,,,(oDlg:nWidth/2)-15,(oDlg:nHeight/2)-20-2*nAltBt) //Preciso do Painel só para limitar o tamanho do browse
+		oLst := FWFormBrowse():New()
+		oLst:oConfig:nRowHeight	:= 25	//-- Reduzo um pouco a altura das linhas
+		oLst:oConfig:nFontHeader:= 09	//-- Reduzo o tamanho da fonte
+		oLst:oConfig:nFontBody	:= 10	//-- Reduzo o tamanho da fonte
+
+		oLst:setDataArray()
+		oLst:setArray( aEmpresas )	//-- Seta o vetor a ser utilizado
+		//oLst:disableConfig()
+		oLst:disableReport()
+		oLst:SetLocate()			//-- Habilita a Localização de registros
+		oLst:bDelOk	:= {|| .F. }	//-- Não permite deletar linhas
+
+		// Evento de DuploClick (troca o valor do primeiro elemento do Vetor)
+		oLst:bLDblClick := {|| aEmpresas[oLst:nAt][01] := !aEmpresas[oLst:nAt][01] }
+		
+		oLst:AddButton('Inverte Seleção', {|| aEval(oLst:oData:aArray,{|x| x[01] := .Not. x[01]}) , oLst:Refresh() })
+
+		oLst:AddMarkColumns({|| If(aEmpresas[oLst:nAt][01],'LBTIK','LBNO') })	//-- Coluna Marca
+		aTail(oLst:aColumns):bHeaderClick	:= {|| aEval(oLst:oData:aArray,{|x| x[01]:= lMarca }) , lMarca:=.Not.lMarca , oLst:Refresh() }	//-- Marca/Desmarca Todos
+
+		// Monta a linha a ser exibina no Browse
+		//               Descrição       bDados                        Tipo   Picture     Alinhamento        Tam Dec Edita
+		oLst:addColumn({'Empresa'		,{|| aEmpresas[oLst:nAt][02]+'-'+aEmpresas[oLst:nAt][03]},'C',/*cPicture*/ , COLUMN_ALIGN_LEFT	, 40,00,.F.})
+
+		oLst:Activate(oPnl)
+
+		//-----------------------------------------------------------------------------------------
+		tButton():New(aPosBt[1],aPosBt[2][1],'Cancelar'		,oDlg,{|| lOk := .F. , oDlg:End() },nLarBt,nAltBt,,,,.T.)
+
+		tButton():New(aPosBt[1],aPosBt[2][5],'OK'			,oDlg,{|| IIf((lOk := sfVldOK(oLst)),oDlg:End(),) },nLarBt,nAltBt,,,,.T.)
+		
+		oDlg:lMaximized	:= .T.	//-- Executa com a tela maximizada
+		//oDlg:lEscClose := .F.  //Nao permite fechar usando a tecla ESC
+	// ativa diálogo centralizado
+	oDlg:Activate(/*uPar1*/,/*uPar2*/,/*uPar3*/,.T./*lCenter*/,/*{|Self| Valid }*/,/*uPar6*/,/*{|Self| Init }*/ )
+
+Return lOk
+
+//-------------------------------------------------------------------------------------------------
+/*/{Protheus.doc} sfVldOK
+@description	Valida a seleção dos títulos, precisa ser selecionado pelo menos 1
+@autor			Cirilo Rocha
+@since			31/07/2025
+/*/
+//-------------------------------------------------------------------------------------------------
+Static Function sfVldOK(oLst	AS Object)			AS Logical
+
+	//-- Declaração de Variáveis ----------------------------------------------
+	Local lRet		:= .F.							AS Logical
+	Local nQtdReg	:= 0							AS Numeric
+	
+	//-------------------------------------------------------------------------
+	aEval(oLst:oData:aArray,{|x| IIf(x[01],nQtdReg++,) })
+	
+	If ( nQtdReg > 0 )
+		lRet	:= .T.
+		oDlg:End()
+	Else
+		FwAlertError('Nenhum registro foi marcado. Selecione pelo menos 1 registro para prosseguir.',_MsgLinha_)
+	EndIf
+
+Return lRet
+
+//-------------------------------------------------------------------------------------------------
+/*/{Protheus.doc} sfGravaUpd
+@description	Grava os dados para aplicação do update
+@autor			Cirilo Rocha
+@since			01/08/2025
+/*/
+//-------------------------------------------------------------------------------------------------
+Static Function sfGravaUpd(aPacotes	AS Array)		AS Logical
+
+	//-- Declaração de Variáveis ----------------------------------------------
+	Local aEmpSel	:= {}							AS Array	//-- Array com as empresas selecionadas
+	Local cUUID		:= Lower(FWUUIDv4())			AS Character
+	Local jConfig	:= JsonObject():New()			AS Json
+	Local lErro		:= .F.							AS Logical
+	Local nX										AS Numeric
+	Local nSeq		:= 1							AS Numeric
+
+	Local oStmUpd									AS Object
+	Local cUpdate									AS Character
+
+	//-------------------------------------------------------------------------
+	aEval(aEmpresas,{|x| If(x[01],aAdd(aEmpSel,x[2]),) })	//-- Cria um array com as empresas selecionadas
+
+	//-- Monta o JSON de configuração
+	jConfig["logprocess"] 		:= .F.
+	jConfig["logatualizacao"]	:= .T.
+	jConfig["logwarning"]		:= .F.
+	jConfig["loginclusao"]		:= .F.
+	jConfig["logcritical"]		:= .T.
+	jConfig["oktoall"]			:= .T.
+	jConfig["deletebkp"]		:= .T.
+	jConfig["keeplog"]			:= .T.
+	jConfig["empresas"]			:= aEmpSel
+    jConfig["localizacao"]		:= "BRA"
+
+	Begin Transaction
+		If oStmUpd == NIL
+			BeginContent Var cUpdate
+
+			INSERT INTO TOP_PARAM
+			(PARAM_NAME,PARAM_SESSION,PARAM_VALUE)
+			VALUES ( 'PROTHEUS_BATCH_UPD' , 0 , ? )
+
+			EndContent
+			oStmUpd := FWPreparedStatement():New(cUpdate)
+		EndIf
+		oStmUpd:SetString(1,cUUID)	//-- Seta o UUID gerado
+		//oStmUpd:getFixQuery() retorna query processada
+		If TCSqlExec(oStmUpd:getFixQuery()) < 0	//Executa update no SQL
+			FwAlertError(	'Erro na execução do update.'+CRLF+;
+							TCSqlError(),_MsgLinha_)
+			DisarmTransaction()
+			lErro	:= .T.
+		EndIf
+		oStmUpd:Destroy()		//-- Chama o destrutor
+		FreeObj(oStmUpd)		//-- Destroi objeto
+
+		dbUseArea(.T.,'TOPCONN', 'SYS_BATCH_UPDATE'		,'UPDCAB', .T., .F.)	//-- Abre tabelas para preencher
+		dbUseArea(.T.,'TOPCONN', 'SYS_BATCH_UPDATE_SET'	,'UPDDET', .T., .F.)	//-- Abre tabelas para preencher
+
+		RecLock('UPDCAB',.T.)		//-- Bloqueia o registro para edição
+			UPDCAB->BA_BATCHID	:= cUUID
+			UPDCAB->BA_DESCRI	:= cDescPct
+			UPDCAB->BA_DATE		:= Date()
+			UPDCAB->BA_TIME		:= Time()+'.000'
+			UPDCAB->BA_LOCALIZ	:= "BRA"
+			UPDCAB->BA_PARAM	:= jConfig:toJson()	//-- Seta o JSON de configuração
+		UPDCAB->(MsUnLock())		//-- Desbloqueia o registro para edição
+		
+		For nX := 1 to Len(aPacotes)		//-- Percorre os pacotes selecionados
+			If aPacotes[nX][nP_MARK]
+				RecLock('UPDDET',.T.)
+					UPDDET->ST_BATCHID	:= cUUID						//-- Seta o UUID gerado
+					UPDDET->ST_SEQ		:= StrZero(nSeq++,4)			//-- Sequência
+					UPDDET->ST_SETID	:= 'set'+UPDDET->ST_SEQ			//-- Seta o ID
+					UPDDET->ST_DESCRI	:= aPacotes[nX][nP_NOM]			//-- Descrição
+					UPDDET->ST_METADAT	:= aPacotes[nX][nP_JSON]:toJson()		//-- Tipo de Metadado
+					UPDDET->ST_STATUS	:= '1'							//-- Status pendente
+				UPDDET->(MsUnLock())		//-- Desbloqueia o registro para edição
+
+				If .Not. sfMovArq(	aPacotes[nX][nP_PATH],;
+									cPathUpd+cUUID+'\'+UPDDET->ST_SETID+'\')	//-- Move a pasta para o diretório de atualização
+					DisarmTransaction()
+					lErro	:= .T.
+					Exit
+				EndIf
+			EndIf
+		Next nX
+
+	End Transaction
+
+	If lErro
+		FWMsgRun(,{|| FWDirRemove(cPathUpd+cUUID,,.T.) },_MsgLinha_+' - Apagando temporários','Aguarde...')
+	EndIf
+
+Return .Not. lErro
+
+//-------------------------------------------------------------------------------------------------
+/*/{Protheus.doc} sfMovArq
+@description	Move todos os arquivos de um diretório para outro
+@autor			Cirilo Rocha
+@since			01/08/2025
+/*/
+//-------------------------------------------------------------------------------------------------
+Static Function sfMovArq(	cDirOri		AS Character,;
+							cDirDest	AS Character)			AS Logical
+
+	//-- Declaração de Variáveis ----------------------------------------------
+	Local aArquivos	:= {}							AS Array
+	Local lRet		:= .T.							AS Logical
+	Local nX										AS Numeric
+
+	//-------------------------------------------------------------------------
+	If .Not. FWMakeDir(cDirDest,.T.)
+		Return .F.
+	EndIf
+
+	aArquivos := Directory(cDirOri + "\*.*")
+	For nX := 1 to Len(aArquivos)
+		If fRename(cDirOri+aArquivos[nX][1],cDirDest+ExtractFile(aArquivos[nX][1])) < 0
+			FwAlertError(	'Erro ao mover o arquivo: '+aArquivos[nX][1]+CRLF+;
+							cValToChar(fError()),_MsgLinha_)
+			lRet	:= .F.
+			Exit
+		EndIf
+	Next nX
+
+Return lRet

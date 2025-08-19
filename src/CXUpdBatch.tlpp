@@ -444,12 +444,12 @@ Static Function sfSeparaArq(cArquivos	AS Character);	//01 cArquivos
 		If nPQueb > 0					//Windows!
 			While .T.
 				//Busca proxima quebra
-				nPQueb	:= At(':',cArquivos,nPAtu+2)		//Pula o primeiro c:\
+				nPQueb	:= At(':',cArquivos,nPAtu+3)		//Pula o primeiro c:\
 				nPFim	:= Rat(';',Left(cArquivos,nPQueb))	//+3 para pular o próprio c:\ do arquivo atual
 				If nPFim == 0
 					Exit
 				Else
-					aAdd(aArquivos,SubStr(cArquivos,nPAtu,nPFim-nPAtu))
+					aAdd(aArquivos,AllTrim(SubStr(cArquivos,nPAtu,nPFim-nPAtu)))
 					nPAtu	:= nPFim+1
 				EndIf
 			EndDo
@@ -465,7 +465,7 @@ Static Function sfSeparaArq(cArquivos	AS Character);	//01 cArquivos
 				EndIf
 			EndDo
 		EndIf
-		aAdd(aArquivos,SubStr(cArquivos,nPAtu))	//Último arquivo ou 1 Arquivo
+		aAdd(aArquivos,AllTrim(SubStr(cArquivos,nPAtu)))	//Último arquivo ou 1 Arquivo
 	EndIf
 
 Return aArquivos

@@ -3,8 +3,8 @@
 #INCLUDE 'ParmType.ch'
 #INCLUDE 'FwBrowse.ch'
 
-Static _cVersao		:= '1.10'						AS Character
-Static _cDtVersao	:= '02/08/2025'					AS Character
+Static _cVersao		:= '1.15'						AS Character
+Static _cDtVersao	:= '13/09/2025'					AS Character
 
 #DEFINE _LINHA_			StrZero(ProcLine(),5)
 #DEFINE _NomeProg_		RetFileName(ProcSource())
@@ -75,6 +75,12 @@ Static Function sfUpdBatchMain()					AS Logical
 	Private nP_JSON	:= 09							AS Numeric
 	
 	Private nP_TAM	:= 09							AS Numeric
+
+	//-- Preciso ter alguma tela de interface para que o sistema abra depois a tela de seleção de arquivos
+	FwAlertInfo('<h3>'+'Esta rotina tem objetivo de criar um lote de atualizações a serem aplicadas'+;
+				' com o UpdBatch.'+CRLF+CRLF+;
+				'Permite selecionar os pacotes de atualização diretamente dos arquivos zip da Totvs.'+;
+				'</h3>',_MsgLinha_+' - v'+_cVersao+' - '+_cDtVersao)
 
 	//-------------------------------------------------------------------------
 	cDescPct	:= '### CXUpdBatch - '+Transform(DtoS(Date()),"@R 9999/99/99")+'-'+Time()+' ###'
@@ -491,7 +497,7 @@ Static Function sfSelectPcts(aDados	AS Array)		AS Logical
 	Private oDlg,oLst,oPnl							AS Object
 	
 	//-------------------------------------------------------------------------
-	oDlg	:= MSDialog():New(	000,000,600,1200,_MsgLinha_+' - Selecione os Pacotes de Atualização - '+_cVersao+'|'+_cDtVersao,/*cPar6*/,/*nPar7*/,/*lPar8*/,;
+	oDlg	:= MSDialog():New(	000,000,600,1200,_MsgLinha_+' - Selecione os Pacotes de Atualização - v'+_cVersao+' | '+_cDtVersao,/*cPar6*/,/*nPar7*/,/*lPar8*/,;
 								/*DS_MODALFRAME*/,/*anClrText*/,/*anClrBack*/,/*oPar12*/,/*oWnd*/,.T.,,,,/*lTransparent*/)
 
 		aPosBt	:= sfPosBtn(oDlg,nLarBt,nAltBt)
@@ -615,7 +621,7 @@ Static Function sfAbreAmbiente(bFuncao	AS CodeBlock)		AS Logical
 	FWMsgRun(,;
 			{||lRet := RPCSetEnv(	aSM0[nP][1]		,;	//01 Empresa
 									aSM0[nP][2]		,;	//02 Filial
-									'000000'		,;	//03 Usuario
+									/*cEnvUser*/	,;	//03 Usuario
 									/*cEnvPass*/	,;	//04 Senha de Usuario
 									/* cMod */		,;	//05 Modulo (3ch)
 									_NomeProg_		,;	//06 Nome da Funcao
@@ -641,7 +647,7 @@ Static Function sfAbreAmbiente(bFuncao	AS CodeBlock)		AS Logical
 	//-- Cria uma janela principal para trabalho
 	Public oMainWnd					AS Object
 	
-	oMainWnd := TWindow():New( 0, 0, 600, 800, _MsgLinha_+'-oMainWnd-'+_cVersao+'|'+_cDtVersao,,,,,,,,,,,,.T.,.T.,.T.,.T.,.T.)
+	oMainWnd := TWindow():New( 000, 000, 600, 800, _MsgLinha_+'-oMainWnd-v'+_cVersao+' | '+_cDtVersao,,,,,,,,,,,,.T.,.T.,.T.,.T.,.T.)
 
 	oMainWnd:Activate( 'MAXIMIZED', oMainWnd:bLClicked, oMainWnd:bRClicked, oMainWnd:bMoved,;
 						oMainWnd:bResized, oMainWnd:bPainted, oMainWnd:bKeyDown, bFuncao ,;

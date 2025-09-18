@@ -3,8 +3,8 @@
 #INCLUDE 'ParmType.ch'
 #INCLUDE 'FwBrowse.ch'
 
-Static _cVersao		:= '1.15'						AS Character
-Static _cDtVersao	:= '13/09/2025'					AS Character
+Static _cVersao		:= '1.16'						AS Character
+Static _cDtVersao	:= '18/09/2025'					AS Character
 
 #DEFINE _LINHA_			StrZero(ProcLine(),5)
 #DEFINE _NomeProg_		RetFileName(ProcSource())
@@ -79,7 +79,8 @@ Static Function sfUpdBatchMain()					AS Logical
 	//-- Preciso ter alguma tela de interface para que o sistema abra depois a tela de seleção de arquivos
 	FwAlertInfo('<h3>'+'Esta rotina tem objetivo de criar um lote de atualizações a serem aplicadas'+;
 				' com o UpdBatch.'+CRLF+CRLF+;
-				'Permite selecionar os pacotes de atualização diretamente dos arquivos zip da Totvs.'+;
+				'Permite selecionar os pacotes de atualização diretamente dos arquivos zip da Totvs.'+CRLF+CRLF+;
+				'By Cirilo Rocha'+;
 				'</h3>',_MsgLinha_+' - v'+_cVersao+' - '+_cDtVersao)
 
 	//-------------------------------------------------------------------------
@@ -144,7 +145,7 @@ Static Function sfGetUpdates()						AS Character
 	Local cProfChave:= ProcName()					AS Character
 	Local cMascara	:= '*.zip'						AS Character	//-- Mascara e Salvar não devem ser informados com diretórios e tFileDialog
 	Local lSalvar	:= .F.							AS Logical
-	Local nOpcoes	:= GETF_LOCALHARD+GETF_NETWORKDRIVE+GETF_MULTISELECT	AS Numeric
+	Local nOpcoes	:= nOr(GETF_LOCALHARD,GETF_NETWORKDRIVE,GETF_MULTISELECT)	AS Numeric
 
 	Local cDrive,cDir,cFile,cExten					AS Character
 

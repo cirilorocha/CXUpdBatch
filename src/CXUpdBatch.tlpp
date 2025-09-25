@@ -3,8 +3,8 @@
 #INCLUDE 'ParmType.ch'
 #INCLUDE 'FwBrowse.ch'
 
-Static _cVersao		:= '1.16'						AS Character
-Static _cDtVersao	:= '18/09/2025'					AS Character
+Static _cVersao		:= '1.17'						AS Character
+Static _cDtVersao	:= '23/09/2025'					AS Character
 
 #DEFINE _LINHA_			StrZero(ProcLine(),5)
 #DEFINE _NomeProg_		RetFileName(ProcSource())
@@ -225,26 +225,33 @@ Static Function sfExtraiPct(aArquivos	AS Array)	AS Logical
 		aPacotes[nX][nP_MSG]	:= ''
 		aPacotes[nX][nP_JSON]	:= JsonObject():New()
 
-		aArqZip	:= FListZip( aArquivos[nX],@nRet)
-		If nRet < 0
-			aPacotes[nX][nP_MSG]  := _LINERRO_+' - Erro ao compactar arquivo: '+aArquivos[nX]
-			aPacotes[nX][nP_ERRO] := .T.
-			Loop
+		//-- Se os arquivos estiverem local, faço uma verificação prévia antes de enviar para o servidor,
+		// se já estiverem lá por conta do WebApp não preciso fazer essa verificação
+		If .Not. ( Upper(GetTempPath(.T.,.T.)) $ Upper(aArquivos[nX]) )	//-- Se NÃO está no diretório do WebApp, ou seja, diretório local
+			aArqZip	:= FListZip( aArquivos[nX],@nRet)
+			If nRet < 0
+				aPacotes[nX][nP_MSG]  := _LINERRO_+' - Erro ao compactar arquivo: '+aArquivos[nX]
+				aPacotes[nX][nP_ERRO] := .T.
+				Loop
+			EndIf
+
+			If aScan(aArqZip,{|x| x[1] == 'sdf/bra/'}) <= 0
+				aPacotes[nX][nP_MSG]  := _LINERRO_+' - Pacote NÃO possui o diretório \sdf\bra\'
+				aPacotes[nX][nP_ERRO] := .T.
+				Loop
+			EndIf
+
+			If aScan(aArqZip,{|x| x[1] == 'sdf/bra/sdfbra.txt'}) <= 0
+				aPacotes[nX][nP_MSG]  := _LINERRO_+' - Pacote NÃO possui o arquivo sdfbra.txt'
+				aPacotes[nX][nP_ERRO] := .T.
+				Loop
+			EndIf
 		EndIf
 
-		If aScan(aArqZip,{|x| x[1] == 'sdf/bra/'}) <= 0
-			aPacotes[nX][nP_MSG]  := _LINERRO_+' - Pacote NÃO possui o diretório \sdf\bra\'
-			aPacotes[nX][nP_ERRO] := .T.
-			Loop
-		EndIf
-
-		If aScan(aArqZip,{|x| x[1] == 'sdf/bra/sdfbra.txt'}) <= 0
-			aPacotes[nX][nP_MSG]  := _LINERRO_+' - Pacote NÃO possui o arquivo sdfbra.txt'
-			aPacotes[nX][nP_ERRO] := .T.
-			Loop
-		EndIf
-
-		If .Not. CpyT2S(aArquivos[nX],cPathTmp,.F.,.F.,500000)	//-- Buffer de 500k melhora a performance
+		//-- Copia o arquivo para o diretório temporário
+		//If .Not. CpyT2S(aArquivos[nX],cPathTmp,.F.,.F.,500000)	//-- Buffer de 500k melhora a performance
+		If .Not. __CopyFile(aArquivos[nX],cPathTmp+RTrim(ExtractFile(aArquivos[nX])),,,,500000)		//-- Buffer de 500k melhora a performance
+			//-- PRECISO USAR A FUNÇÃO __CopyFile, POIS A CpyT2S TEM PROBLEMA COM O PATH DO WEBAPP 10.1.3 E tFileDialog
 			aPacotes[nX][nP_MSG]  := _LINERRO_+' - Erro ao copiar arquivo para o servidor'
 			aPacotes[nX][nP_ERRO] := .T.
 			Loop

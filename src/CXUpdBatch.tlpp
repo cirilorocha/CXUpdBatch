@@ -3,8 +3,8 @@
 #INCLUDE 'ParmType.ch'
 #INCLUDE 'FwBrowse.ch'
 
-Static _cVersao		:= '1.17'						AS Character
-Static _cDtVersao	:= '23/09/2025'					AS Character
+Static _cVersao		:= '1.18'						AS Character
+Static _cDtVersao	:= '20/11/2025'					AS Character
 
 #DEFINE _LINHA_			StrZero(ProcLine(),5)
 #DEFINE _NomeProg_		RetFileName(ProcSource())
@@ -647,8 +647,11 @@ Static Function sfAbreAmbiente(bFuncao	AS CodeBlock)		AS Logical
 		Return .F.
 	EndIf
 
-	__cUserID	:= '000000'
-	cUserName	:= 'Administrador'
+	//PRECISO ABRIR OS SX'S AQUI PARA FUNCIONAR CORRETAMENTE
+	OpenSm0()	//Abre o sigamat
+
+//	__cUserID	:= '000000'
+//	cUserName	:= 'Administrador'
 	__cInternet	:= NIL			//-- Preciso colocar aqui para mostrar mensagens
 	lMsHelpAuto	:= .F.			//-- Preciso colocar aqui para mostrar mensagens
 

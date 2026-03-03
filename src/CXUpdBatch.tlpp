@@ -2,10 +2,9 @@
 #INCLUDE 'Totvs.ch'
 #INCLUDE 'ParmType.ch'
 #INCLUDE 'FwBrowse.ch'
-#INCLUDE 'FWCommand.CH'
 
-Static _cVersao		:= '1.20'						AS Character
-Static _cDtVersao	:= '25/02/2026'					AS Character
+Static _cVersao		:= '1.21'						AS Character
+Static _cDtVersao	:= '03/03/2026'					AS Character
 
 //-------------------------------------------------------------------------------------------------
 /*/{Protheus.doc} CXUpdBatch

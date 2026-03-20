@@ -3,8 +3,8 @@
 #INCLUDE 'ParmType.ch'
 #INCLUDE 'FwBrowse.ch'
 
-Static _cVersao		:= '1.21'						AS Character
-Static _cDtVersao	:= '03/03/2026'					AS Character
+Static _cVersao		:= '1.22'						AS Character
+Static _cDtVersao	:= '20/03/2026'					AS Character
 
 //-------------------------------------------------------------------------------------------------
 /*/{Protheus.doc} CXUpdBatch
@@ -226,12 +226,12 @@ Static Function sfExtraiPct(aArquivos	AS Array)	AS Logical
 			EndIf
 
 			If aScan(aArqZip,{|x| x[1] == 'sdf/bra/'}) <= 0
-				aPacotes[nX]['msg']  := _LINERRO_+' - Pacote NÃO possui o diretório \sdf\bra\'
-				aPacotes[nX]['erro'] := .T.
-				Loop
-			EndIf
-
-			If aScan(aArqZip,{|x| x[1] == 'sdf/bra/sdfbra.txt'}) <= 0
+				If aScan(aArqZip,{|x| x[1] == '/sdfbra.txt'}) <= 0
+					aPacotes[nX]['msg']  := _LINERRO_+' - Pacote NÃO possui o arquivo sdfbra.txt'
+					aPacotes[nX]['erro'] := .T.
+					Loop
+				EndIf
+			ElseIf aScan(aArqZip,{|x| x[1] == 'sdf/bra/sdfbra.txt'}) <= 0
 				aPacotes[nX]['msg']  := _LINERRO_+' - Pacote NÃO possui o arquivo sdfbra.txt'
 				aPacotes[nX]['erro'] := .T.
 				Loop
@@ -260,11 +260,13 @@ Static Function sfExtraiPct(aArquivos	AS Array)	AS Logical
 			Loop
 		EndIf
 
-		aPacotes[nX]['path'] += 'sdf\bra\'
-		If .Not. ExistDir(aPacotes[nX]['path'])
-			aPacotes[nX]['msg']  := _LINERRO_+' - Pacote NÃO possui o diretório \sdf\bra\'
-			aPacotes[nX]['erro'] := .T.
-			Loop
+		If ExistDir(aPacotes[nX]['path']+'sdf\bra\')
+			aPacotes[nX]['path'] += 'sdf\bra\'
+		Else
+			aPacotes[nX]['path'] += '\'
+//			aPacotes[nX]['msg']  := _LINERRO_+' - Pacote NÃO possui o diretório \sdf\bra\'
+//			aPacotes[nX]['erro'] := .T.
+//			Loop
 		EndIf
 
 		If .Not. File(aPacotes[nX]['path']+'sdfbra.txt')

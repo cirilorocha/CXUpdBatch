@@ -1,0 +1,8 @@
+.vscode/launch.json
+.vscode/servers.json
+.vscode/settings.json
+.vscode/.advpl/_binary_class.prw
+.vscode/.advpl/_binary_functions.prw
+scripts/
+utils/
+.claude

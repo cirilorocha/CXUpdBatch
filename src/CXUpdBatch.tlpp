@@ -3,8 +3,8 @@
 #INCLUDE 'ParmType.ch'
 #INCLUDE 'FwBrowse.ch'
 
-Static _cVersao		:= '1.22'						AS Character
-Static _cDtVersao	:= '20/03/2026'					AS Character
+Static _cVersao		:= '1.23'						AS Character
+Static _cDtVersao	:= '14/04/2026'					AS Character
 
 //-------------------------------------------------------------------------------------------------
 /*/{Protheus.doc} CXUpdBatch
@@ -490,7 +490,10 @@ Static Function sfSelectPcts(aDados	AS Array)		AS Logical
 	Local lMarca	:= .F.							AS Logical	//-- Como o browse vem pré-marcado, o botão desmarca
 
 	//-- Deixei privados caso alguma função chamada precise dos dados
-	Private oDlgModal,oDlg,oLst,oPnl				AS Object
+	Private oDlgModal								AS Object
+	Private oDlg									AS Object
+	Private oLst									AS Object
+	Private oPnl									AS Object
 	
 	//-- Parâmetros da Rotina -------------------------------------------------
 	ParamType 0		VAR aDados		AS Array
@@ -595,17 +598,18 @@ Static Function sfAbreAmbiente(bFuncao	AS CodeBlock)		AS Logical
 
 	RpcSetType(3)
 	FWMsgRun(,;
-			{||lRet := RPCSetEnv(	aSM0[nP][1]		;	//01 Empresa
-								,	aSM0[nP][2]		;	//02 Filial
-								,	/*cEnvUser*/	;	//03 Usuario
-								,	/*cEnvPass*/	;	//04 Senha de Usuario
-								,	/* cMod */		;	//05 Modulo (3ch)
-								,	_NomeProg_		;	//06 Nome da Funcao
-								,	/*aTables*/		;	//07 Tabelas para abrir
-								,	/*lShowFinal*/	;	//08 Alimenta a variavel lMsFinalAuto
-								,	.F.				;	//09 Gera mensagem de erro ao ocorrer erro ao checar a licenca
-								,	.T.				;	//10 Pega a primeira filial do arquivo SM0 quando não passar a filial e realiza a abertura dos SXs
-								,	.F.				;	//11 Faz a abertura da conexao com servidor do banco
+			{||lRet := RPCSetEnv(	
+						/*01*/		aSM0[nP][1]		;	//Empresa
+						/*02*/	,	aSM0[nP][2]		;	//Filial
+						/*03*/	,	/*cEnvUser*/	;	//Usuario
+						/*04*/	,	/*cEnvPass*/	;	//Senha de Usuario
+						/*05*/	,	/* cMod */		;	//Modulo (3ch)
+						/*06*/	,	_NomeProg_		;	//Nome da Funcao
+						/*07*/	,	/*aTables*/		;	//Tabelas para abrir
+						/*08*/	,	/*lShowFinal*/	;	//Alimenta a variavel lMsFinalAuto
+						/*09*/	,	.F.				;	//Gera mensagem de erro ao ocorrer erro ao checar a licenca
+						/*10*/	,	.T.				;	//Pega a primeira filial do arquivo SM0 quando não passar a filial e realiza a abertura dos SXs
+						/*11*/	,	.F.				;	//Faz a abertura da conexao com servidor do banco
 								);
 						},;
 			_MsgLinha_+" - Montando Ambiente",;

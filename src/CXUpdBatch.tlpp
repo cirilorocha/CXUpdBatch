@@ -3,8 +3,8 @@
 #INCLUDE 'ParmType.ch'
 #INCLUDE 'FwBrowse.ch'
 
-Static _cVersao		:= '1.23'						AS Character
-Static _cDtVersao	:= '14/04/2026'					AS Character
+Static _cVersao		:= '1.24'						AS Character
+Static _cDtVersao	:= '21/04/2026'					AS Character
 
 //-------------------------------------------------------------------------------------------------
 /*/{Protheus.doc} CXUpdBatch
@@ -598,7 +598,7 @@ Static Function sfAbreAmbiente(bFuncao	AS CodeBlock)		AS Logical
 
 	RpcSetType(3)
 	FWMsgRun(,;
-			{||lRet := RPCSetEnv(	
+			{||lRet := RPCSetEnv(					;
 						/*01*/		aSM0[nP][1]		;	//Empresa
 						/*02*/	,	aSM0[nP][2]		;	//Filial
 						/*03*/	,	/*cEnvUser*/	;	//Usuario

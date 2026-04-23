@@ -3,8 +3,8 @@
 #INCLUDE 'ParmType.ch'
 #INCLUDE 'FwBrowse.ch'
 
-Static _cVersao		:= '1.24'						AS Character
-Static _cDtVersao	:= '21/04/2026'					AS Character
+Static _cVersao		:= '1.25'						AS Character
+Static _cDtVersao	:= '23/04/2026'					AS Character
 
 //-------------------------------------------------------------------------------------------------
 /*/{Protheus.doc} CXUpdBatch
@@ -42,9 +42,7 @@ User Function CXUpdBatch()
 	EndIf
 
 	//-- Se gerou os pacotes chama o UpdBatch!
-	If lOK
-		UpdBatch()
-	EndIf
+	If lOK		;	UpdBatch()		;	EndIf
 
 Return
 //-------------------------------------------------------------------------------------------------
@@ -64,11 +62,11 @@ Static Function sfUpdBatchMain()					AS Logical
 	Private cPathUpd								AS Character
 
 	//-- Preciso ter alguma tela de interface para que o sistema abra depois a tela de seleção de arquivos
-	FwAlertInfo('<h3>'+'Esta rotina tem objetivo de criar um lote de atualizações a serem aplicadas'+;
-				' com o UpdBatch.'+CRLF+CRLF+;
-				'Permite selecionar os pacotes de atualização diretamente dos arquivos zip da Totvs.'+CRLF+CRLF+;
-				'By Cirilo Rocha'+;
-				'</h3>',_MsgLinha_+' - v'+_cVersao+' - '+_cDtVersao)
+	FwAlertInfo('<h3>'+'Esta rotina tem objetivo de criar um lote de atualizações a serem aplicadas';
+			+	' com o UpdBatch.'+CRLF+CRLF;
+			+	'Permite selecionar os pacotes de atualização diretamente dos arquivos zip da Totvs.'+CRLF+CRLF;
+			+	'By Cirilo Rocha';
+			+	'</h3>',_MsgLinha_+' - v'+_cVersao+' - '+_cDtVersao)
 
 	//-------------------------------------------------------------------------
 	cDescPct	:= '### CXUpdBatch - '+Transform(DtoS(Date()),"@R 9999/99/99")+'-'+Time()+' ###'
@@ -79,11 +77,11 @@ Static Function sfUpdBatchMain()					AS Logical
 	If .Not. sfUpdPend()				;	Return .F.		;	EndIf	//-- Tem update pedente?
 
 	For nX := 1 to Len(aSM0)
-		If aScan(aEmpresas,{|x| x['code'] == aSM0[nX][SM0_GRPEMP] }) == 0
+		If aScan(aEmpresas,{|x| x:code == aSM0[nX][SM0_GRPEMP] }) == 0
 			aAdd(aEmpresas,	{									;
-								'mark':	.T.						;
-							,	'code':	aSM0[nX][SM0_GRPEMP]	;
-							,	'name':	aSM0[nX][SM0_NOMECOM]	;
+								'MARK':	.T.						;
+							,	'CODE':	aSM0[nX][SM0_GRPEMP]	;
+							,	'NAME':	aSM0[nX][SM0_NOMECOM]	;
 							})
 		EndIf
 	Next nX
@@ -103,8 +101,8 @@ Static Function sfUpdBatchMain()					AS Logical
 	If Empty(cDescPct)
 		lOk	:= .F.
 	Else
-		If 	sfSelectPcts(aPacotes) .And. ;
-			sfSelectEmp()
+		If 		sfSelectPcts(aPacotes)	;
+		.And.	sfSelectEmp()			;
 
 			lOK	:= 	sfGravaUpd(aPacotes)
 		EndIf
@@ -133,17 +131,21 @@ Static Function sfGetUpdates()						AS Character
 	Local lSalvar	:= .F.							AS Logical
 	Local nOpcoes	:= nOr(GETF_LOCALHARD,GETF_NETWORKDRIVE,GETF_MULTISELECT)	AS Numeric
 
-	Local cDrive,cDir,cFile,cExten					AS Character
+	Local cDrive									AS Character
+	Local cDir										AS Character
+	Local cFile										AS Character
+	Local cExten									AS Character
 
 	//-------------------------------------------------------------------------
 	cDir	:= fwGetProfString(cProfSecao,cProfChave,cDirInicial,.T.)	//-- Carrega último caminho utilizado
 
-	cRet    := tFileDialog(	cMascara											,;	//01 cMascara
-							_MsgLinha_+' Os pacotes para atualização: '			,;	//02 cTitulo
-							1													,;	//03 nDef
-							IIf(ExistDir(cDir),cDir,cDirInicial)				,;	//04 cDirInicial
-							lSalvar												,;	//05 lSalvar
-							nOpcoes	    										)	//06 nOpcoes
+	cRet    := tFileDialog(	cMascara											;	//01 cMascara
+						,	_MsgLinha_+' Os pacotes para atualização: '			;	//02 cTitulo
+						,	1													;	//03 nDef
+						,	IIf(ExistDir(cDir),cDir,cDirInicial)				;	//04 cDirInicial
+						,	lSalvar												;	//05 lSalvar
+						,	nOpcoes	    										;	//06 nOpcoes
+						)
 	
 	//-- Tratamento de erros para WebApp (pode não ser necessário no futuro)
 	aRet	:= sfSeparaArq(cRet)
@@ -204,15 +206,15 @@ Static Function sfExtraiPct(aArquivos	AS Array)	AS Logical
 		ProcessMessages()
 
 		aAdd(aPacotes,	{											;
-							'mark': 	.F.							;
-						,	'data': 	'ERRO'						;
-						,	'release': 	'ERRO'						;
-						,	'nome': 	RetFileName(aArquivos[nX])	;
-						,	'arquivo':	RTrim(aArquivos[nX])		;
-						,	'path':		cPathTmp+StrZero(nX,2)+'\'	;
-						,	'erro':		.F.							;
-						,	'msg' :		''							;
-						,	'json_pkg':	JsonObject():New()			;
+							'MARK': 	.F.							;
+						,	'DATA': 	'ERRO'						;
+						,	'RELEASE': 	'ERRO'						;
+						,	'NOME': 	RetFileName(aArquivos[nX])	;
+						,	'ARQUIVO':	RTrim(aArquivos[nX])		;
+						,	'PATH':		cPathTmp+StrZero(nX,2)+'\'	;
+						,	'ERRO':		.F.							;
+						,	'MSG' :		''							;
+						,	'JSON_PKG':	JsonObject():New()			;
 						})
 
 		//-- Se os arquivos estiverem local, faço uma verificação prévia antes de enviar para o servidor,
@@ -220,20 +222,20 @@ Static Function sfExtraiPct(aArquivos	AS Array)	AS Logical
 		If .Not. ( Upper(GetTempPath(.T.,.T.)) $ Upper(aArquivos[nX]) )	//-- Se NÃO está no diretório do WebApp, ou seja, diretório local
 			aArqZip	:= FListZip( aArquivos[nX],@nRet)
 			If nRet < 0
-				aPacotes[nX]['msg']  := _LINERRO_+' - Erro ao compactar arquivo: '+aArquivos[nX]
-				aPacotes[nX]['erro'] := .T.
+				aPacotes[nX]:msg  := _LINERRO_+' - Erro ao compactar arquivo: '+aArquivos[nX]
+				aPacotes[nX]:erro := .T.
 				Loop
 			EndIf
 
 			If aScan(aArqZip,{|x| x[1] == 'sdf/bra/'}) <= 0
 				If aScan(aArqZip,{|x| x[1] == '/sdfbra.txt'}) <= 0
-					aPacotes[nX]['msg']  := _LINERRO_+' - Pacote NÃO possui o arquivo sdfbra.txt'
-					aPacotes[nX]['erro'] := .T.
+					aPacotes[nX]:msg  := _LINERRO_+' - Pacote NÃO possui o arquivo sdfbra.txt'
+					aPacotes[nX]:erro := .T.
 					Loop
 				EndIf
 			ElseIf aScan(aArqZip,{|x| x[1] == 'sdf/bra/sdfbra.txt'}) <= 0
-				aPacotes[nX]['msg']  := _LINERRO_+' - Pacote NÃO possui o arquivo sdfbra.txt'
-				aPacotes[nX]['erro'] := .T.
+				aPacotes[nX]:msg  := _LINERRO_+' - Pacote NÃO possui o arquivo sdfbra.txt'
+				aPacotes[nX]:erro := .T.
 				Loop
 			EndIf
 		EndIf
@@ -242,137 +244,123 @@ Static Function sfExtraiPct(aArquivos	AS Array)	AS Logical
 		//If .Not. CpyT2S(aArquivos[nX],cPathTmp,.F.,.F.,500000)	//-- Buffer de 500k melhora a performance
 		If .Not. __CopyFile(aArquivos[nX],cPathTmp+RTrim(ExtractFile(aArquivos[nX])),,,,500000)		//-- Buffer de 500k melhora a performance
 			//-- PRECISO USAR A FUNÇÃO __CopyFile, POIS A CpyT2S TEM PROBLEMA COM O PATH DO WEBAPP 10.1.3 E tFileDialog
-			aPacotes[nX]['msg']  := _LINERRO_+' - Erro ao copiar arquivo para o servidor'
-			aPacotes[nX]['erro'] := .T.
+			aPacotes[nX]:msg  := _LINERRO_+' - Erro ao copiar arquivo para o servidor'
+			aPacotes[nX]:erro := .T.
 			Loop
 		EndIf
-		aPacotes[nX]['arquivo' ]	:= cPathTmp+RTrim(ExtractFile(aArquivos[nX]))
+		aPacotes[nX]:arquivo	:= cPathTmp+RTrim(ExtractFile(aArquivos[nX]))
 
-		If .Not. FWMakeDir(aPacotes[nX]['path'],.T.)
-			aPacotes[nX]['msg']  := _LINERRO_+' - Não foi possível criar o diretório: '+aPacotes[nX]['path']
-			aPacotes[nX]['erro'] := .T.
-			Loop
-		EndIf
-
-		If FUnZip( aPacotes[nX]['arquivo'] , aPacotes[nX]['path'] ) <> 0
-			aPacotes[nX]['msg']  := _LINERRO_+' - Erro ao extrair o pacote.'
-			aPacotes[nX]['erro'] := .T.
+		If .Not. FWMakeDir(aPacotes[nX]:path,.T.)
+			aPacotes[nX]:msg  := _LINERRO_+' - Não foi possível criar o diretório: '+aPacotes[nX]:path
+			aPacotes[nX]:erro := .T.
 			Loop
 		EndIf
 
-		If ExistDir(aPacotes[nX]['path']+'sdf\bra\')
-			aPacotes[nX]['path'] += 'sdf\bra\'
+		If FUnZip( aPacotes[nX]:arquivo , aPacotes[nX]:path ) <> 0
+			aPacotes[nX]:msg  := _LINERRO_+' - Erro ao extrair o pacote.'
+			aPacotes[nX]:erro := .T.
+			Loop
+		EndIf
+
+		If ExistDir(aPacotes[nX]:path+'sdf\bra\')
+			aPacotes[nX]:path += 'sdf\bra\'
 		Else
-			aPacotes[nX]['path'] += '\'
-//			aPacotes[nX]['msg']  := _LINERRO_+' - Pacote NÃO possui o diretório \sdf\bra\'
-//			aPacotes[nX]['erro'] := .T.
+			aPacotes[nX]:path += '\'
+//			aPacotes[nX]:msg  := _LINERRO_+' - Pacote NÃO possui o diretório \sdf\bra\'
+//			aPacotes[nX]:erro := .T.
 //			Loop
 		EndIf
 
-		If .Not. File(aPacotes[nX]['path']+'sdfbra.txt')
-			aPacotes[nX]['msg']  := _LINERRO_+' - Pacote NÃO possui o arquivo sdfbra.txt'
-			aPacotes[nX]['erro'] := .T.
+		If .Not. File(aPacotes[nX]:path+'sdfbra.txt')
+			aPacotes[nX]:msg  := _LINERRO_+' - Pacote NÃO possui o arquivo sdfbra.txt'
+			aPacotes[nX]:erro := .T.
 			Loop
 		EndIf
 		
-		cArqSDF	:= sfReadFile(aPacotes[nX]['path']+'sdfbra.txt')
+		cArqSDF	:= sfReadFile(aPacotes[nX]:path+'sdfbra.txt')
 		If Empty(cArqSDF)
-			aPacotes[nX]['msg']  := _LINERRO_+' - ERRO: Arquivo sdfbra.txt vazio.'
-			aPacotes[nX]['erro'] := .T.
+			aPacotes[nX]:msg  := _LINERRO_+' - ERRO: Arquivo sdfbra.txt vazio.'
+			aPacotes[nX]:erro := .T.
 			Loop
 		EndIf
 
-		nP		:= At('EM_PRJDES ', cArqSDF)		//-- Posição do campo EM_PRJDES
-		If nP <= 0
-			nP		:= At('FL_DESCRI ', cArqSDF)	//-- Posição do campo FL_DESCRI
-			If nP <= 0
-				aPacotes[nX]['msg']  := _LINERRO_+' - Arquivo sdfbra.txt NÃO possui o campo FL_DESCRI'
-				aPacotes[nX]['erro'] := .T.
+		If ( nP := At('EM_PRJDES ', cArqSDF) ) <= 0			//-- Posição do campo EM_PRJDES
+			If ( nP := At('FL_DESCRI ', cArqSDF) ) <= 0		//-- Posição do campo FL_DESCRI
+				aPacotes[nX]:msg  := _LINERRO_+' - Arquivo sdfbra.txt NÃO possui o campo FL_DESCRI'
+				aPacotes[nX]:erro := .T.
 				Loop
 			Else
 				cTemp	:= RTrim(SubStr(cArqSDF, nP+10,100))
-				aPacotes[nX]['json_pkg']['fl_descri']	:= cTemp
+				aPacotes[nX]:json_pkg['fl_descri']	:= cTemp
 			EndIf
 		Else
 			cTemp	:= RTrim(SubStr(cArqSDF, nP+10,100))
-			aPacotes[nX]['json_pkg']['em_prjdes']	:= cTemp
+			aPacotes[nX]:json_pkg['em_prjdes']	:= cTemp
 		EndIf
-		aPacotes[nX]['nome']	:= cTemp	//-- Extrai o campo EM_RELEASE ou FL_CPMARK
+		aPacotes[nX]:nome	:= cTemp	//-- Extrai o campo EM_RELEASE ou FL_CPMARK
 
-		nP		:= At('FL_DATE   ', cArqSDF)		//-- Posição do campo FL_DATE
-		If nP <= 0
-			aPacotes[nX]['msg']  := _LINERRO_+' - Arquivo sdfbra.txt NÃO possui o campo FL_DATE'
-			aPacotes[nX]['erro'] := .T.
+		If ( nP := At('FL_DATE   ', cArqSDF) ) <= 0		//-- Posição do campo FL_DATE
+			aPacotes[nX]:msg  := _LINERRO_+' - Arquivo sdfbra.txt NÃO possui o campo FL_DATE'
+			aPacotes[nX]:erro := .T.
 			Loop
 		EndIf
 		cTemp	:= RTrim(SubStr(cArqSDF, nP+10, 10))
-		aPacotes[nX]['json_pkg']['fl_date']	:= cTemp
-		aPacotes[nX]['data']	:= cTemp	//-- Extrai o campo FL_DATE
+		aPacotes[nX]:json_pkg['fl_date']	:= cTemp
+		aPacotes[nX]:data	:= cTemp	//-- Extrai o campo FL_DATE
 
-		nP		:= At('FL_TIME   ', cArqSDF)		//-- Posição do campo FL_TIME
-		If nP > 0
-			aPacotes[nX]['json_pkg']['fl_time']	:= RTrim(SubStr(cArqSDF, nP+10, 10))
+		If ( nP := At('FL_TIME   ', cArqSDF) ) > 0		//-- Posição do campo FL_TIME
+			aPacotes[nX]:json_pkg['fl_time']	:= RTrim(SubStr(cArqSDF, nP+10, 10))
 		EndIf
 
-		nP		:= At('FL_APMODE ', cArqSDF)		//-- Posição do campo FL_APMODE
-		If nP > 0
-			aPacotes[nX]['json_pkg']['fl_apmode']	:= RTrim(SubStr(cArqSDF, nP+10, 10))
+		If ( nP := At('FL_APMODE ', cArqSDF) ) > 0		//-- Posição do campo FL_APMODE
+			aPacotes[nX]:json_pkg['fl_apmode']	:= RTrim(SubStr(cArqSDF, nP+10, 10))
 		EndIf
 
-		nP		:= At('PR_IDENT  ', cArqSDF)		//-- Posição do campo PR_IDENT
-		If nP > 0
-			aPacotes[nX]['json_pkg']['pr_ident']	:= RTrim(SubStr(cArqSDF, nP+10, 10))
+		If ( nP := At('PR_IDENT  ', cArqSDF) ) > 0		//-- Posição do campo PR_IDENT
+			aPacotes[nX]:json_pkg['pr_ident']	:= RTrim(SubStr(cArqSDF, nP+10, 10))
 		EndIf
 
-		nP		:= At('PK_IDENT  ', cArqSDF)		//-- Posição do campo PK_IDENT
-		If nP > 0
-			aPacotes[nX]['json_pkg']['pk_ident']	:= RTrim(SubStr(cArqSDF, nP+10, 10))
+		If ( nP := At('PK_IDENT  ', cArqSDF) ) > 0		//-- Posição do campo PK_IDENT
+			aPacotes[nX]:json_pkg['pk_ident']	:= RTrim(SubStr(cArqSDF, nP+10, 10))
 		EndIf
 
-		nP		:= At('EM_RELEASE', cArqSDF)		//-- Posição do campo EM_RELEASE
-		If nP <= 0
-			nP		:= At('FL_CPMARK ', cArqSDF)	//-- Posição do campo FL_CPMARK
-			If nP <= 0
-				aPacotes[nX]['msg']  := _LINERRO_+' - Arquivo sdfbra.txt NÃO possui o campo FL_CPMARK'
-				aPacotes[nX]['erro'] := .T.
+		If ( nP := At('EM_RELEASE', cArqSDF) ) <= 0		//-- Posição do campo EM_RELEASE
+			If ( nP := At('FL_CPMARK ', cArqSDF) ) <= 0	//-- Posição do campo FL_CPMARK
+				aPacotes[nX]:msg  := _LINERRO_+' - Arquivo sdfbra.txt NÃO possui o campo FL_CPMARK'
+				aPacotes[nX]:erro := .T.
 				Loop
 			Else
 				cTemp	:= RTrim(SubStr(cArqSDF, nP+10, 10))
-				aPacotes[nX]['json_pkg']['fl_cpmark']	:= cTemp
+				aPacotes[nX]:json_pkg['fl_cpmark']	:= cTemp
 			EndIf
 		Else
 			cTemp	:= RTrim(SubStr(cArqSDF, nP+10, 10))
-			aPacotes[nX]['json_pkg']['em_release']	:= cTemp
+			aPacotes[nX]:json_pkg['em_release']	:= cTemp
 		EndIf
-		aPacotes[nX]['release']	:= cTemp	//-- Extrai o campo EM_RELEASE ou FL_CPMARK
+		aPacotes[nX]:release	:= cTemp	//-- Extrai o campo EM_RELEASE ou FL_CPMARK
 		
-		nP		:= At('FL_NOTICE ', cArqSDF)		//-- Posição do campo FL_NOTICE
-		If nP > 0
-			aPacotes[nX]['json_pkg']['fl_notice']	:= RTrim(SubStr(cArqSDF, nP+10, 100))
+		If ( nP := At('FL_NOTICE ', cArqSDF) ) > 0		//-- Posição do campo FL_NOTICE
+			aPacotes[nX]:json_pkg['fl_notice']	:= RTrim(SubStr(cArqSDF, nP+10, 100))
 		EndIf
 
-		nP		:= At('FL_ECPMARK', cArqSDF)		//-- Posição do campo FL_ECPMARK
-		If nP > 0
-			aPacotes[nX]['json_pkg']['fl_ecpmark']	:= RTrim(SubStr(cArqSDF, nP+10, 150))
+		If ( nP := At('FL_ECPMARK', cArqSDF) ) > 0		//-- Posição do campo FL_ECPMARK
+			aPacotes[nX]:json_pkg['fl_ecpmark']	:= RTrim(SubStr(cArqSDF, nP+10, 150))
 		EndIf
 
-		nP		:= At('EM_ENCREL', cArqSDF)		//-- Posição do campo EM_ENCREL
-		If nP > 0
-			aPacotes[nX]['json_pkg']['em_encrel']	:= RTrim(SubStr(cArqSDF, nP+10, 30))
+		If ( nP := At('EM_ENCREL', cArqSDF) ) > 0		//-- Posição do campo EM_ENCREL
+			aPacotes[nX]:json_pkg['em_encrel']	:= RTrim(SubStr(cArqSDF, nP+10, 30))
 		EndIf
 
-		nP		:= At('EM_PRJCOD ', cArqSDF)		//-- Posição do campo EM_PRJCOD
-		If nP > 0
-			aPacotes[nX]['json_pkg']['em_prjcod']	:= RTrim(SubStr(cArqSDF, nP+10, 10))
+		If ( nP := At('EM_PRJCOD ', cArqSDF) ) > 0		//-- Posição do campo EM_PRJCOD
+			aPacotes[nX]:json_pkg['em_prjcod']	:= RTrim(SubStr(cArqSDF, nP+10, 10))
 		EndIf
 
-		nP		:= At('EM_PRJVER ', cArqSDF)		//-- Posição do campo EM_PRJVER
-		If nP > 0
-			aPacotes[nX]['json_pkg']['em_prjver']	:= RTrim(SubStr(cArqSDF, nP+10, 10))
+		If ( nP := At('EM_PRJVER ', cArqSDF) ) > 0		//-- Posição do campo EM_PRJVER
+			aPacotes[nX]:json_pkg['em_prjver']	:= RTrim(SubStr(cArqSDF, nP+10, 10))
 		EndIf	
 
-		aPacotes[nX]['mark']	:= .T.
-		aPacotes[nX]['erro']	:= .F.
+		aPacotes[nX]:mark	:= .T.
+		aPacotes[nX]:erro	:= .F.
 	Next nX
 
 Return .T.
@@ -396,7 +384,7 @@ Static Function sfReadFile(cFile	AS Character)	AS Character
 	//-------------------------------------------------------------------------
 	oFile := FWFileReader():New(cFile,/*xBreakLine*/)
 	oFile:SetBufferSize(50000)	//-- Aumento o buffer vai agilizar bastante a leitura
-	If (oFile:Open())
+	If oFile:Open()
 		cRet	:= oFile:FullRead()
 		If Empty(cRet)
 			FwAlertError('ERRO: Arquivo vazio.',_MsgLinha_)
@@ -415,7 +403,7 @@ Return cRet
 @description	Função para quebrar a lista de arquivos da função tFileDialog, quando multiseleção
 				 para conseguir identificar arquivos que contenham ; no nome.                     
 @autor			Cirilo Rocha
-@since			28/07/2025
+@since			23/04/2026
 /*/
 //-------------------------------------------------------------------------------------------------
 Static Function sfSeparaArq(cArquivos	AS Character);	//01 cArquivos
@@ -442,28 +430,24 @@ Static Function sfSeparaArq(cArquivos	AS Character);	//01 cArquivos
 	//			"/tmp/rgperc29 - 2022-12-08-17;18;29.sql"
 
 	//---------------------------------------------------------------------------------------------
-	If At(' | ',cArquivos)	//cGetFile antiga
+	If At(' | ',cArquivos) > 0	//-- cGetFile antiga
 		aArquivos	:= StrTokArr2(cArquivos,' | ',.F.)
 	Else
 		nPAtu	:= 1
-		nPQueb	:= At(':',cArquivos)
-		If nPQueb > 0					//Windows!
+		If ( nPQueb	:= At(':',cArquivos) ) > 0				//Windows!
 			While .T.
 				//Busca proxima quebra
-				nPQueb	:= At(':',cArquivos,nPAtu+3)		//Pula o primeiro c:\
-				nPFim	:= Rat(';',Left(cArquivos,nPQueb))	//+3 para pular o próprio c:\ do arquivo atual
-				If nPFim == 0
+				nPQueb	:= At(':',cArquivos,nPAtu+3)		//-- Pula o primeiro c:\
+				If ( nPFim := Rat(';',Left(cArquivos,nPQueb)) ) == 0	//+3 para pular o próprio c:\ do arquivo atual
 					Exit
 				Else
 					aAdd(aArquivos,AllTrim(SubStr(cArquivos,nPAtu,nPFim-nPAtu)))
 					nPAtu	:= nPFim+1
 				EndIf
 			EndDo
-		ElseIf At(';/',cArquivos)		//Linux
+		ElseIf ( nPQueb	:= At(';/',cArquivos) ) > 0			//Linux
 			While .T.
-				//Busca proxima quebra
-				nPFim	:= At(';/',cArquivos,nPAtu)
-				If nPFim == 0
+				If ( nPFim := At(';/',cArquivos,nPAtu) ) == 0		//--Busca proxima quebra
 					Exit
 				Else
 					aAdd(aArquivos,SubStr(cArquivos,nPAtu,nPFim-nPAtu))
@@ -523,18 +507,18 @@ Static Function sfSelectPcts(aDados	AS Array)		AS Logical
 		// Evento de DuploClick (troca o valor do primeiro elemento do Vetor)
 		oLst:bLDblClick := {|| sfMarcaReg() }
 		
-		oLst:AddButton('Inverte Seleção', {|| aEval(oLst:oData:aArray,{|x| IIF(x['erro'],,x['mark'] := .Not. x['mark'])}),oLst:Refresh() })
+		oLst:AddButton('Inverte Seleção', {|| aEval(oLst:oData:aArray,{|x| IIF(x:erro,,x:mark := .Not. x:mark)}),oLst:Refresh() })
 
-		oLst:AddMarkColumns({|| If(aDados[oLst:nAt]['mark'],'LBTIK','LBNO') })	//-- Coluna Marca
-		aTail(oLst:aColumns):bHeaderClick	:= {|| aEval(oLst:oData:aArray,{|x| IIf(x['erro'],, x['mark']:= lMarca ) }) , lMarca:=.Not.lMarca , oLst:Refresh() }	//-- Marca/Desmarca Todos
+		oLst:AddMarkColumns({|| If(aDados[oLst:nAt]:mark,'LBTIK','LBNO') })	//-- Coluna Marca
+		aTail(oLst:aColumns):bHeaderClick	:= {|| aEval(oLst:oData:aArray,{|x| IIf(x:erro,, x:mark:= lMarca ) }) , lMarca:=.Not.lMarca , oLst:Refresh() }	//-- Marca/Desmarca Todos
 
 		// Monta a linha a ser exibina no Browse
 		//               Descrição       bDados                        Tipo   Picture     Alinhamento        Tam Dec Edita
-		oLst:addColumn({'Data'			,{|| aDados[oLst:nAt]['data'	]},'C',/*cPicture*/ , COLUMN_ALIGN_LEFT	, 08,00,.F.})
-		oLst:addColumn({'Release'		,{|| aDados[oLst:nAt]['release'	]},'C',/*cPicture*/ , COLUMN_ALIGN_LEFT	, 10,00,.F.})
-		oLst:addColumn({'Nome'			,{|| aDados[oLst:nAt]['nome'	]},'C',/*cPicture*/ , COLUMN_ALIGN_LEFT	, 50,00,.F.})
-		oLst:addColumn({'Mensagem Erro'	,{|| aDados[oLst:nAt]['msg'		]},'C',/*cPicture*/ , COLUMN_ALIGN_LEFT	, 50,00,.F.})
-		oLst:addColumn({'Arquivo'		,{|| aDados[oLst:nAt]['arquivo' ]},'C',/*cPicture*/ , COLUMN_ALIGN_LEFT	, 50,00,.F.})
+		oLst:addColumn({'Data'			,{|| aDados[oLst:nAt]:data		},'C',/*cPicture*/ , COLUMN_ALIGN_LEFT	, 08,00,.F.})
+		oLst:addColumn({'Release'		,{|| aDados[oLst:nAt]:release	},'C',/*cPicture*/ , COLUMN_ALIGN_LEFT	, 10,00,.F.})
+		oLst:addColumn({'Nome'			,{|| aDados[oLst:nAt]:nome		},'C',/*cPicture*/ , COLUMN_ALIGN_LEFT	, 50,00,.F.})
+		oLst:addColumn({'Mensagem Erro'	,{|| aDados[oLst:nAt]:msg		},'C',/*cPicture*/ , COLUMN_ALIGN_LEFT	, 50,00,.F.})
+		oLst:addColumn({'Arquivo'		,{|| aDados[oLst:nAt]:arquivo 	},'C',/*cPicture*/ , COLUMN_ALIGN_LEFT	, 50,00,.F.})
 
 		oLst:Activate(oPnl)
 
@@ -562,13 +546,13 @@ Static Function sfMarcaReg(	lMsg	AS Logical	)	//01 lMsg
 	Default lMsg	:= .T.
 
 	//-- Marca/Desmarca o registro atual
-	If oLst:oData:aArray[nAt]['erro']
+	If oLst:oData:aArray[nAt]:erro
 		If lMsg
 			FwAlertError('Não é possível marcar o registro com erro.',_MsgLinha_)
 		EndIf
 		Return
 	Else
-		oLst:oData:aArray[nAt]['mark'] := !oLst:oData:aArray[nAt]['mark']
+		oLst:oData:aArray[nAt]:mark := !oLst:oData:aArray[nAt]:mark
 	EndIf
 	
 Return
@@ -748,16 +732,16 @@ Static Function sfSelectEmp()						AS Logical
 		oLst:bDelOk	:= {|| .F. }	//-- Não permite deletar linhas
 
 		// Evento de DuploClick (troca o valor do primeiro elemento do Vetor)
-		oLst:bLDblClick := {|| aEmpresas[oLst:nAt]['mark'] := !aEmpresas[oLst:nAt]['mark'] }
+		oLst:bLDblClick := {|| aEmpresas[oLst:nAt]:mark := !aEmpresas[oLst:nAt]:mark }
 		
-		oLst:AddButton('Inverte Seleção', {|| aEval(oLst:oData:aArray,{|x| x['mark'] := .Not. x['mark']}) , oLst:Refresh() })
+		oLst:AddButton('Inverte Seleção', {|| aEval(oLst:oData:aArray,{|x| x:mark := .Not. x:mark}) , oLst:Refresh() })
 
-		oLst:AddMarkColumns({|| If(aEmpresas[oLst:nAt]['mark'],'LBTIK','LBNO') })	//-- Coluna Marca
-		aTail(oLst:aColumns):bHeaderClick	:= {|| aEval(oLst:oData:aArray,{|x| x['mark']:= lMarca }) , lMarca:=.Not.lMarca , oLst:Refresh() }	//-- Marca/Desmarca Todos
+		oLst:AddMarkColumns({|| If(aEmpresas[oLst:nAt]:mark,'LBTIK','LBNO') })	//-- Coluna Marca
+		aTail(oLst:aColumns):bHeaderClick	:= {|| aEval(oLst:oData:aArray,{|x| x:mark:= lMarca }) , lMarca:=.Not.lMarca , oLst:Refresh() }	//-- Marca/Desmarca Todos
 
 		// Monta a linha a ser exibina no Browse
 		//               Descrição       bDados                        Tipo   Picture     Alinhamento        Tam Dec Edita
-		oLst:addColumn({'Empresa'		,{|| aEmpresas[oLst:nAt]['code']+'-'+aEmpresas[oLst:nAt]['name']},'C',/*cPicture*/ , COLUMN_ALIGN_LEFT	, 40,00,.F.})
+		oLst:addColumn({'Empresa'		,{|| aEmpresas[oLst:nAt]:code+'-'+aEmpresas[oLst:nAt]:name},'C',/*cPicture*/ , COLUMN_ALIGN_LEFT	, 40,00,.F.})
 
 		oLst:Activate(oPnl)
 
@@ -786,7 +770,7 @@ Static Function sfVldOK(oLst	AS Object)			AS Logical
 	ParamType 0		VAR oLst		AS Object
 	
 	//-------------------------------------------------------------------------
-	aEval(oLst:oData:aArray,{|x| IIf(x['mark'],nQtdReg++,) })
+	aEval(oLst:oData:aArray,{|x| IIf(x:mark,nQtdReg++,) })
 	
 	If ( nQtdReg > 0 )
 		lRet	:= .T.
@@ -820,7 +804,7 @@ Static Function sfGravaUpd(aPacotes	AS Array)		AS Logical
 	ParamType 0		VAR aPacotes		AS Array
 	
 	//-------------------------------------------------------------------------
-	aEval(aEmpresas,{|x| If(x['mark'],aAdd(aEmpSel,x['code']),) })	//-- Cria um array com as empresas selecionadas
+	aEval(aEmpresas,{|x| If(x:mark,aAdd(aEmpSel,x:code),) })	//-- Cria um array com as empresas selecionadas
 
 	//-- Monta o JSON de configuração
 	jConfig	:= 	{								;
@@ -871,17 +855,17 @@ Static Function sfGravaUpd(aPacotes	AS Array)		AS Logical
 		UPDCAB->(MsUnLock())		//-- Desbloqueia o registro para edição
 		
 		For nX := 1 to Len(aPacotes)		//-- Percorre os pacotes selecionados
-			If aPacotes[nX]['mark']
+			If aPacotes[nX]:mark
 				RecLock('UPDDET',.T.)
 					UPDDET->ST_BATCHID	:= cUUID							//-- Seta o UUID gerado
 					UPDDET->ST_SEQ		:= StrZero(nSeq++,4)				//-- Sequência
 					UPDDET->ST_SETID	:= 'set'+UPDDET->ST_SEQ				//-- Seta o ID
-					UPDDET->ST_DESCRI	:= aPacotes[nX]['nome']				//-- Descrição
-					UPDDET->ST_METADAT	:= aPacotes[nX]['json_pkg']:toJson()//-- Tipo de Metadado
+					UPDDET->ST_DESCRI	:= aPacotes[nX]:nome				//-- Descrição
+					UPDDET->ST_METADAT	:= aPacotes[nX]:json_pkg:toJson()	//-- Tipo de Metadado
 					UPDDET->ST_STATUS	:= '1'								//-- Status pendente
 				UPDDET->(MsUnLock())
 
-				If .Not. sfMovArq(	aPacotes[nX]['path'],;
+				If .Not. sfMovArq(	aPacotes[nX]:path,;
 									cPathUpd+cUUID+'\'+UPDDET->ST_SETID+'\')	//-- Move a pasta para o diretório de atualização
 					DisarmTransaction()
 					lErro	:= .T.
@@ -919,9 +903,7 @@ Static Function sfMovArq(cDirOri	AS Character;
 	ParamType 1		VAR cDirDest	AS Character
 
 	//-------------------------------------------------------------------------
-	If .Not. FWMakeDir(cDirDest,.T.)
-		Return .F.
-	EndIf
+	If .Not. FWMakeDir(cDirDest,.T.)	;	Return .F.		;	EndIf
 
 	aArquivos := Directory(cDirOri + "\*.*")
 	For nX := 1 to Len(aArquivos)

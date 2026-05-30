@@ -1,4 +1,3 @@
-#INCLUDE 'RWMake.ch'
 #INCLUDE 'Totvs.ch'
 #INCLUDE 'ParmType.ch'
 #INCLUDE 'FwBrowse.ch'
